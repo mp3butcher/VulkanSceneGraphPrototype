@@ -37,6 +37,7 @@ namespace vsg
         int getComputeFamily() const { return _computeFamily; }
 
         const VkPhysicalDeviceProperties& getProperties() const { return _properties; }
+        const VkPhysicalDeviceFeatures& getFeatures() const { return _features; }
 
     protected:
 
@@ -48,6 +49,7 @@ namespace vsg
         int                         _computeFamily;
 
         VkPhysicalDeviceProperties  _properties;
+        VkPhysicalDeviceFeatures _features;
 
         vsg::ref_ptr<Instance>      _instance;
         vsg::ref_ptr<Surface>       _surface;

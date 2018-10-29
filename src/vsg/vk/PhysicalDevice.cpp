@@ -24,6 +24,7 @@ PhysicalDevice::PhysicalDevice(Instance* instance, VkPhysicalDevice device, int 
     _surface(surface)
 {
     vkGetPhysicalDeviceProperties(_device, &_properties);
+    vkGetPhysicalDeviceFeatures(_device, &_features);
 }
 
 PhysicalDevice::~PhysicalDevice()

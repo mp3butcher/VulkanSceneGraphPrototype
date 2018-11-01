@@ -17,19 +17,72 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace vsg
 {
 
-Device::Device(VkDevice device, PhysicalDevice* physicalDevice, AllocationCallbacks* allocator) :
-    _device(device),
+Device::Device(
+    PhysicalDevice* physicalDevice, AllocationCallbacks* allocator) :
     _physicalDevice(physicalDevice),
     _allocator(allocator)
-{
+{   setOwner(physicalDevice);
+    _deviceFeatures.samplerAnisotropy = VK_TRUE;
+    _deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 }
 
 Device::~Device()
 {
+    vkDestroy();
+}
+bool Device::vkDestroy() {
     if (_device)
     {
+        //TODO all the vkchildren must die
         vkDestroyDevice(_device, _allocator);
     }
+    return true;
+}
+
+bool Device::vkCreate() {
+    if (!_physicalDevice)
+    {
+        return false ;//Device::Result("Error: vsg::Device::create(...) failed to create logical device, undefined PhysicalDevice.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
+    }
+
+    if(_queueCreateInfos.empty())
+    {   //autoset based on_physicalDevice
+        std::set<int> uniqueQueueFamiles;
+        if (_physicalDevice->getGraphicsFamily()>=0) uniqueQueueFamiles.insert(_physicalDevice->getGraphicsFamily());
+        if (_physicalDevice->getComputeFamily()>=0) uniqueQueueFamiles.insert(_physicalDevice->getComputeFamily());
+        if (_physicalDevice->getPresentFamily()>=0) uniqueQueueFamiles.insert(_physicalDevice->getPresentFamily());
+
+        float queuePriority = 1.0f;
+        for (int queueFamily : uniqueQueueFamiles)
+        {
+            VkDeviceQueueCreateInfo queueCreateInfo = {};
+            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queueCreateInfo.queueFamilyIndex = queueFamily;
+            queueCreateInfo.queueCount = 1;
+            queueCreateInfo.pQueuePriorities = &queuePriority;
+            _queueCreateInfos.push_back(queueCreateInfo);
+        }
+    }
+
+    _deviceCreateInfo.queueCreateInfoCount = _queueCreateInfos.size();
+    _deviceCreateInfo.pQueueCreateInfos = _queueCreateInfos.empty() ? nullptr : _queueCreateInfos.data();
+
+    _deviceCreateInfo.pEnabledFeatures = &_deviceFeatures;
+
+    _deviceCreateInfo.enabledExtensionCount = _deviceExtensions.size();
+    _deviceCreateInfo.ppEnabledExtensionNames = _deviceExtensions.empty() ? nullptr : _deviceExtensions.data();
+
+    _deviceCreateInfo.enabledLayerCount = _layers.size();
+    _deviceCreateInfo.ppEnabledLayerNames = _layers.empty() ? nullptr : _layers.data();
+
+    VkResult result = vkCreateDevice(*_physicalDevice, &_deviceCreateInfo, _allocator, &_device);
+    if (result != VK_SUCCESS) return false;
+    // construct vsg Proxies for created queues
+    //these are not vsg owned by Device has queues have life cycle hardbound to it
+    //they will be destroy at vkDestroyDevice call in Device destructor
+
+    return true;
+
 }
 
 Device::Result Device::create(PhysicalDevice* physicalDevice, Names& layers, Names& deviceExtensions, AllocationCallbacks* allocator)
@@ -78,22 +131,25 @@ Device::Result Device::create(PhysicalDevice* physicalDevice, Names& layers, Nam
     VkResult result = vkCreateDevice(*physicalDevice, &createInfo, allocator, &device);
     if (result == VK_SUCCESS)
     {
-        return Result(new Device(device, physicalDevice, allocator));
+        //return Result(new Device(device, physicalDevice, allocator));
     }
     else
     {
         return Device::Result("Error: vsg::Device::create(...) failed to create logical device.", result);
     }
 }
-
 VkQueue Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex)
 {
     VkQueue queue;
     vkGetDeviceQueue(_device, queueFamilyIndex, queueIndex, &queue);
     return queue;
+}/*
+Queue * Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex){
+    Queue * q=new Queue(this,queueFamilyIndex,queueIndex);
+    q->vkUpdate();
+    return q;
 }
-
-
+*/
 
 
 }

@@ -16,28 +16,101 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 namespace vsg
 {
-    class VSG_DECLSPEC PhysicalDevice : public Inherit<Object, PhysicalDevice>
+    ///proxy base for
+    /// -vkObject life cycle managment encapsulation
+    /// -tree based vkObject dependancies (explicit proxies ownership with recursive update)
+    class VSG_DECLSPEC vkObjectProxy : public Inherit<Object, vkObjectProxy>
+    {
+    protected:
+        //life cycle
+        enum StateBitField {DIRTY=1, ALLOCATED=2} t_StateBitField;
+        int _state=DIRTY;
+        //dependencies (a customlist would be more flexi(add/remove) compact(footprint mem)
+        std::vector<vsg::ref_ptr<vkObjectProxy> > _childproxies;
+    vsg::ref_ptr<vkObjectProxy> _parentproxy;
+    inline void addDependant(vkObjectProxy*v){_childproxies.push_back(vsg::ref_ptr<vkObjectProxy> (v));}
+    inline void removeDependant(vkObjectProxy*v){
+        for (auto item =_childproxies.begin(); item != _childproxies.end();++item )if(*item==v) _childproxies.erase(item);
+     }
+    public:
+        //be carefull with setParent should only be called when no vkObject have been allocated
+    inline const vkObjectProxy* getOwner() const {return _parentproxy;}
+        inline void setOwner(vkObjectProxy*v){if(v){if(_parentproxy!=v){if(_parentproxy)_parentproxy->removeDependant(this);_parentproxy=v;v->removeDependant(this);v->addDependant(this);}}}
+        //propagate dirtiness to dependants vkObjectProxies
+        inline void dirtyTraversal(){ if(_state&DIRTY) for(auto it : _childproxies)it->vkDirty();}
+        //dirty local vkObjects and propagate dirtiness to dependants vkObjectProxies
+        inline void vkDirty(){ if(_state&DIRTY)return; _state|=DIRTY; for(auto it : _childproxies)it->vkDirty();}
+        inline void vkUpdate(){
+            //ascent
+            if(_parentproxy&&_parentproxy->_state&DIRTY)_parentproxy->vkUpdate();
+            else
+            //descent
+            if(_state&DIRTY){
+                if(_state&ALLOCATED) recursDestroy(); recursCreate(); }}
+        ~vkObjectProxy(){if(_parentproxy)
+                _parentproxy->removeDependant(this);}
+    protected:
+        ///create proxy underlying vkObject(s)
+        virtual bool vkCreate(){
+        ///-update underlying vkObject(s)
+            return true;
+        }
+        ///delete proxy underlying vkObject(s)
+        virtual bool vkDestroy(){
+            ///-destroy vkObject(s)
+            return true;
+        }
+        inline bool recursDestroy(){
+            ///-for each dependant propagate destruction
+            for(auto item : _childproxies)
+                item->recursDestroy();
+            vkDestroy();
+            _state^=ALLOCATED;return true;
+        }
+        inline bool recursCreate(){;
+           vkCreate();
+            ///-for each dependant propagate creation
+            for(auto item : _childproxies)
+                item->recursCreate();
+            _state=ALLOCATED;return true;
+        }
+
+    };
+    class VSG_DECLSPEC PhysicalDevice : public Inherit<vkObjectProxy, PhysicalDevice>
     {
     public:
-        PhysicalDevice(Instance* instance, VkPhysicalDevice device, int graphicsFamily, int presentFamily, int computeFamily, Surface* surface);
+       // PhysicalDevice(Instance* instance, VkPhysicalDevice device, int graphicsFamily, int presentFamily, int computeFamily, Surface* surface);
+        PhysicalDevice(Instance* instance=nullptr, Surface* surface=nullptr, int graphicsFamily=-1, int presentFamily=-1, int computeFamily=-1);
 
-        using Result = vsg::Result<PhysicalDevice, VkResult, VK_SUCCESS>;
-        static Result create(Instance* instance, VkQueueFlags queueFlags, Surface* surface=nullptr);
+        //using Result = vsg::Result<PhysicalDevice, VkResult, VK_SUCCESS>;
+        //static Result create(Instance* instance, VkQueueFlags queueFlags, Surface* surface=nullptr);
+
+        virtual bool vkCreate();
+        virtual bool vkDestroy();
 
         bool complete() const { return _device!=VK_NULL_HANDLE && _graphicsFamily>=0 && _presentFamily>=0; }
 
         const Instance* getInstance() const { return _instance.get(); }
+        void setInstance(Instance*i) { _instance=i;vkDirty(); }
         const Surface* getSurface() const { return _surface.get(); }
+        void setSurface(Surface*i) { _surface=i; vkDirty(); }
 
         operator VkPhysicalDevice() const { return _device; }
         VkPhysicalDevice getPhysicalDevice() const { return _device; }
 
         int getGraphicsFamily() const { return _graphicsFamily; }
+        void setGraphicsFamily(int i) { _graphicsFamily=i;vkDirty(); }
         int getPresentFamily() const { return _presentFamily; }
+        void setPresentFamily(int i) { _presentFamily=i;vkDirty(); }
         int getComputeFamily() const { return _computeFamily; }
+        void setComputeFamily(int i) { _computeFamily=i; vkDirty(); }
+
+
+        const VkQueueFlags & getPreferredQueueFlags() const {return  _queueFlags;}
+        void setPreferredQueueFlags(VkQueueFlags v) {  _queueFlags=v; vkDirty();}
 
         const VkPhysicalDeviceProperties& getProperties() const { return _properties; }
-        const VkPhysicalDeviceFeatures& getFeatures() const { return _features; }
+        const std::vector<VkQueueFamilyProperties>& getQueueFamilies() const { return _queueFamilies; }
 
     protected:
 
@@ -50,9 +123,11 @@ namespace vsg
 
         VkPhysicalDeviceProperties  _properties;
         VkPhysicalDeviceFeatures _features;
+        std::vector<VkQueueFamilyProperties> _queueFamilies;
 
         vsg::ref_ptr<Instance>      _instance;
         vsg::ref_ptr<Surface>       _surface;
+        VkQueueFlags _queueFlags;
     };
 
 

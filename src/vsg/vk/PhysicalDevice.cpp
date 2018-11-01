@@ -14,24 +14,103 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 namespace vsg
 {
-
-PhysicalDevice::PhysicalDevice(Instance* instance, VkPhysicalDevice device, int graphicsFamily, int presentFamily, int computeFamily, Surface* surface) :
-    _device(device),
+PhysicalDevice::PhysicalDevice(Instance* instance, Surface* surface, int graphicsFamily, int presentFamily, int computeFamily) :
     _graphicsFamily(graphicsFamily),
     _presentFamily(presentFamily),
     _computeFamily(computeFamily),
     _instance(instance),
-    _surface(surface)
+    _surface(surface),_device(0)
 {
-    vkGetPhysicalDeviceProperties(_device, &_properties);
-    vkGetPhysicalDeviceFeatures(_device, &_features);
+
 }
 
 PhysicalDevice::~PhysicalDevice()
 {
 }
 
-PhysicalDevice::Result PhysicalDevice::create(Instance* instance, VkQueueFlags queueFlags, Surface* surface)
+bool PhysicalDevice::vkCreate() {
+    if (!_instance)
+    {
+        return false;//Result("Error: vsg::PhysicalDevice::create(...) failed to create physical device, undefined Instance.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
+
+    }
+
+    uint32_t queueFamilyCount = 0;
+    {uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(*_instance, &deviceCount, nullptr);
+
+    std::vector<VkPhysicalDevice> devices(deviceCount);
+    vkEnumeratePhysicalDevices(*_instance, &deviceCount, devices.data());
+
+    for (const auto& device : devices)
+    {
+        VkPhysicalDeviceFeatures supportedFeatures;
+        vkGetPhysicalDeviceFeatures(device, &supportedFeatures);
+
+        // Checked the DeviceQueueFamilyProperties for support for graphics
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+        std::vector<VkQueueFamilyProperties> queueFamiles(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamiles.data());
+
+        /*  int graphicsFamily = -1;
+          int presentFamily = -1;
+          int computeFamily = -1;*/
+
+        VkQueueFlags matchedQueues = 0;
+
+        for (uint32_t i=0; i<queueFamilyCount; ++i)
+        {
+            const auto& queueFamily = queueFamiles[i];
+            if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)!=0)
+            {
+                _graphicsFamily = i;
+                matchedQueues |= VK_QUEUE_GRAPHICS_BIT;
+            }
+
+            if ((queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)!=0)
+            {
+                _computeFamily = i;
+                matchedQueues |= VK_QUEUE_COMPUTE_BIT;
+            }
+
+            if (_surface)
+            {
+                VkBool32 presentSupported = false;
+                vkGetPhysicalDeviceSurfaceSupportKHR(device, i, *_surface, &presentSupported);
+                if (queueFamily.queueCount>0 && presentSupported)
+                {
+                    _presentFamily = i;
+                }
+            }
+        }
+        if (((matchedQueues & _queueFlags)==_queueFlags) && (_surface==nullptr || _presentFamily>=0))
+        {
+            _device=device;
+            break;  //Result(new PhysicalDevice(_instance, _device, _graphicsFamily, _presentFamily, _computeFamily, _surface));
+        }
+    }
+    }
+    vkGetPhysicalDeviceProperties(_device, &_properties);
+    vkGetPhysicalDeviceFeatures(_device, &_features);
+    // Checked the DeviceQueueFamilyProperties for support for graphics
+    /* uint32_t queueFamilyCount = 0;
+     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);*/
+
+
+    _queueFamilies.reserve(queueFamilyCount);
+    _queueFamilies.resize(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(_device, &queueFamilyCount, _queueFamilies.data());
+
+
+    return true;
+
+}
+bool PhysicalDevice::vkDestroy() {
+
+}
+
+/*PhysicalDevice::Result PhysicalDevice::create(Instance* instance, VkQueueFlags queueFlags, Surface* surface)
 {
     if (!instance)
     {
@@ -94,7 +173,7 @@ PhysicalDevice::Result PhysicalDevice::create(Instance* instance, VkQueueFlags q
         }
     }
 
-    return Result("Error: vsg::Device::create(...) failed to create physical device.", VK_INCOMPLETE);
-}
+    return Result("Error: vsg::PhysicalDevice::create(...) failed to create physical device.", VK_INCOMPLETE);
+}*/
 
 }

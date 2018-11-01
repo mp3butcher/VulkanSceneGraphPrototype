@@ -104,7 +104,10 @@ GLFW_Window::Result GLFW_Window::create(uint32_t width, uint32_t height, bool de
         // temporary hack to force vkGetPhysicalDeviceSurfaceSupportKHR to be called as the Vulkan
         // debug layer is complaining about vkGetPhysicalDeviceSurfaceSupportKHR not being called
         // for this _surface prior to swap chain creation
-        vsg::ref_ptr<vsg::PhysicalDevice> physicalDevice = vsg::PhysicalDevice::create(shareWindow->instance(), VK_QUEUE_GRAPHICS_BIT, surface);
+        vsg::ref_ptr<vsg::PhysicalDevice> physicalDevice (new vsg::PhysicalDevice(shareWindow->instance(), surface));
+       //= vsg::PhysicalDevice::create(shareWindow->instance(), VK_QUEUE_GRAPHICS_BIT, surface);
+        physicalDevice->setPreferredQueueFlags(VK_QUEUE_GRAPHICS_BIT);
+        physicalDevice->vkUpdate();
     }
     else
     {
@@ -131,10 +134,19 @@ GLFW_Window::Result GLFW_Window::create(uint32_t width, uint32_t height, bool de
         if (!surface) return Result("Error: vsg::GLFW_Window::create(...) failed to create Window, unable to create GLFWSurface.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
 
         // set up device
-        vsg::ref_ptr<vsg::PhysicalDevice> physicalDevice = vsg::PhysicalDevice::create(instance, VK_QUEUE_GRAPHICS_BIT,  surface);
+        vsg::ref_ptr<vsg::PhysicalDevice> physicalDevice(new vsg::PhysicalDevice(instance,surface));
+       // = vsg::PhysicalDevice::create(instance, VK_QUEUE_GRAPHICS_BIT,  surface);
+        //physicalDevice->setOwner(_instance);
+        physicalDevice->setPreferredQueueFlags(VK_QUEUE_GRAPHICS_BIT);
+       // physicalDevice->vkUpdate();
         if (!physicalDevice) return Result("Error: vsg::GLFW_Window::create(...) failed to create Window, no Vulkan PhysicalDevice supported.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
 
-        vsg::ref_ptr<vsg::Device> device = vsg::Device::create(physicalDevice, validatedNames, deviceExtensions, allocator);
+        vsg::ref_ptr<vsg::Device> device(new vsg::Device( physicalDevice,allocator));
+        device->setValidationLayers(validatedNames);
+        device->setDeviceExtensions(deviceExtensions);
+        device->vkUpdate();
+        physicalDevice->vkDirty();
+        device->vkUpdate();
         if (!device) return Result("Error: vsg::GLFW_Window::create(...) failed to create Window, unable to create Vulkan logical Device.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
 
         // set up renderpass with the imageFormat that the swap chain will use

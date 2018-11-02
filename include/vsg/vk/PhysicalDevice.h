@@ -27,26 +27,25 @@ namespace vsg
         int _state=DIRTY;
         //dependencies (a customlist would be more flexi(add/remove) compact(footprint mem)
         std::vector<vsg::ref_ptr<vkObjectProxy> > _childproxies;
-    vsg::ref_ptr<vkObjectProxy> _parentproxy;
-    inline void addDependant(vkObjectProxy*v){_childproxies.push_back(vsg::ref_ptr<vkObjectProxy> (v));}
-    inline void removeDependant(vkObjectProxy*v){
-        for (auto item =_childproxies.begin(); item != _childproxies.end();++item )if(*item==v) _childproxies.erase(item);
-     }
+        vsg::ref_ptr<vkObjectProxy> _parentproxy;
+        inline void addDependant(vkObjectProxy*v){_childproxies.push_back(vsg::ref_ptr<vkObjectProxy> (v));}
+        inline void removeDependant(vkObjectProxy*v){
+            for (auto item =_childproxies.begin(); item != _childproxies.end();++item )if(*item==v) _childproxies.erase(item);
+         }
     public:
         //be carefull with setParent should only be called when no vkObject have been allocated
-    inline const vkObjectProxy* getOwner() const {return _parentproxy;}
-        inline void setOwner(vkObjectProxy*v){if(v){if(_parentproxy!=v){if(_parentproxy)_parentproxy->removeDependant(this);_parentproxy=v;v->removeDependant(this);v->addDependant(this);}}}
-        //propagate dirtiness to dependants vkObjectProxies
-        inline void dirtyTraversal(){ if(_state&DIRTY) for(auto it : _childproxies)it->vkDirty();}
+        inline const vkObjectProxy* getOwner() const {return _parentproxy;}
+        inline void setOwner(vkObjectProxy*v){if(_parentproxy!=v){if(_parentproxy)_parentproxy->removeDependant(this);_parentproxy=v;if(v){v->removeDependant(this);v->addDependant(this);}}}
         //dirty local vkObjects and propagate dirtiness to dependants vkObjectProxies
         inline void vkDirty(){ if(_state&DIRTY)return; _state|=DIRTY; for(auto it : _childproxies)it->vkDirty();}
         inline void vkUpdate(){
-            //ascent
-            if(_parentproxy&&_parentproxy->_state&DIRTY)_parentproxy->vkUpdate();
-            else
+            //ascent (ascend to the first dirty)
+            vkObjectProxy *firstdirt,*cur=this;
+            while(cur){if(cur->_state&DIRTY)firstdirt=cur;cur=cur->_parentproxy;}
+
             //descent
-            if(_state&DIRTY){
-                if(_state&ALLOCATED) recursDestroy(); recursCreate(); }}
+            if(firstdirt->_state&DIRTY){
+                if(firstdirt->_state&ALLOCATED) firstdirt->recursDestroy(); firstdirt->recursCreate(); }}
         ~vkObjectProxy(){if(_parentproxy)
                 _parentproxy->removeDependant(this);}
     protected:

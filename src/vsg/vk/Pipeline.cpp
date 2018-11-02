@@ -10,12 +10,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/vk/Pipeline.h>
 #include <vsg/vk/CommandBuffer.h>
+#include <vsg/vk/Pipeline.h>
 #include <vsg/vk/State.h>
 
-namespace vsg
-{
+using namespace vsg;
 
 ////////////////////////////////////////////////////////////////////////
 //
@@ -38,7 +37,7 @@ Pipeline::~Pipeline()
     }
 }
 
-BindPipeline::BindPipeline(Pipeline* pipeline):
+BindPipeline::BindPipeline(Pipeline* pipeline) :
     _pipeline(pipeline)
 {
 }
@@ -63,5 +62,4 @@ void BindPipeline::dispatch(CommandBuffer& commandBuffer) const
 {
     vkCmdBindPipeline(commandBuffer, _pipeline->getBindPoint(), *_pipeline);
     commandBuffer.setCurrentPipeline(_pipeline);
-}
 }

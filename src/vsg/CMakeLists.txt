@@ -1,8 +1,3 @@
-include_directories(
-    ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_BINARY_DIR}/include
-)
-
 # collect all the headers in the source directory
 file(GLOB HEADERS ${CMAKE_SOURCE_DIR}/include/vsg/*.h ${CMAKE_SOURCE_DIR}/include/vsg/*/*.h)
 
@@ -73,24 +68,78 @@ set(SOURCES
     vk/Swapchain.cpp
 )
 
-add_definitions(${VSG_DEFINITIONS})
-
 add_library(vsg ${HEADERS} ${SOURCES})
 
+if(MSVC)
+    # ensure the libraries are all built in the lib directory
+    macro(SET_OUTPUT_DIR_PROPERTY TARGET_TARGETNAME RELATIVE_OUTDIR)
+        # Global properties (All generators but VS & Xcode)
+        set_target_properties(${TARGET_TARGETNAME} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${OUTPUT_LIBDIR}/${RELATIVE_OUTDIR}")
+        set_target_properties(${TARGET_TARGETNAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_LIBDIR}/${RELATIVE_OUTDIR}")
+        set_target_properties(${TARGET_TARGETNAME} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${OUTPUT_LIBDIR}/${RELATIVE_OUTDIR}")
+
+        # Per-configuration property (VS, Xcode)
+        foreach(CONF ${CMAKE_CONFIGURATION_TYPES})        # For each configuration (Debug, Release, MinSizeRel... and/or anything the user chooses)
+            string(TOUPPER "${CONF}" CONF)                # Go uppercase (DEBUG, RELEASE...)
+
+            # We use "FILE(TO_CMAKE_PATH", to create nice looking paths
+            set_target_properties(${TARGET_TARGETNAME} PROPERTIES "ARCHIVE_OUTPUT_DIRECTORY_${CONF}" "${OUTPUT_LIBDIR}/${RELATIVE_OUTDIR}")
+            set_target_properties(${TARGET_TARGETNAME} PROPERTIES "RUNTIME_OUTPUT_DIRECTORY_${CONF}" "${OUTPUT_LIBDIR}/${RELATIVE_OUTDIR}")
+            set_target_properties(${TARGET_TARGETNAME} PROPERTIES "LIBRARY_OUTPUT_DIRECTORY_${CONF}" "${OUTPUT_LIBDIR}/${RELATIVE_OUTDIR}")
+        endforeach()
+    endmacro()
+
+    SET_OUTPUT_DIR_PROPERTY(vsg "")
+endif()
+
+# set up versions and position independent code that is required for unices
 set_property(TARGET vsg PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET vsg PROPERTY VERSION ${VSG_MAJOR_VERSION}.${VSG_MINOR_VERSION}.${VSG_PATCH_VERSION})
 set_property(TARGET vsg PROPERTY SOVERSION ${VSG_SOVERSION})
+set_property(TARGET vsg PROPERTY CXX_STANDARD 17)
 
-target_link_libraries(vsg Vulkan::Vulkan GLFW::GLFW)
-
-install(TARGETS vsg
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib
-        COMPONENT libvsg
+target_include_directories(vsg PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/vsg DESTINATION include)
+target_link_libraries(vsg Vulkan::Vulkan glfw)
 
+install(TARGETS vsg EXPORT vsgTargets
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+        INCLUDES DESTINATION include
+)
+
+if (BUILD_SHARED_LIBS)
+    target_compile_definitions(vsg INTERFACE VSG_SHARED_LIBRARY)
+endif()
+
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/vsg DESTINATION include)
 if (NOT(${CMAKE_BINARY_DIR} STREQUAL ${CMAKE_SOURCE_DIR}))
     install(DIRECTORY ${CMAKE_BINARY_DIR}/include/vsg DESTINATION include)
 endif()
+
+# [==[
+install(EXPORT vsgTargets
+    FILE vsgTargets.cmake
+    NAMESPACE vsg::
+    DESTINATION lib/cmake/vsg
+)
+
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file("${CMAKE_BINARY_DIR}/src/vsg/vsgConfigVersion.cmake"
+    VERSION ${VSG_MAJOR_VERSION}.${VSG_MINOR_VERSION}.${VSG_PATCH_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES "vsgConfig.cmake" "${CMAKE_BINARY_DIR}/src/vsg/vsgConfigVersion.cmake"
+    DESTINATION lib/cmake/vsg
+)
+
+# ]==]
+
+
+

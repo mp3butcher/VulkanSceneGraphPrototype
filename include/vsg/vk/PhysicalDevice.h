@@ -87,7 +87,8 @@ namespace vsg
         virtual bool vkCreate();
         virtual bool vkDestroy();
 
-        bool complete() const { return _device!=VK_NULL_HANDLE && _graphicsFamily>=0 && _presentFamily>=0; }
+
+        bool complete() const { return _device != VK_NULL_HANDLE && _graphicsFamily >= 0 && _presentFamily >= 0; }
 
         const Instance* getInstance() const { return _instance.get(); }
         void setInstance(Instance*i) { _instance=i;vkDirty(); }
@@ -112,13 +113,12 @@ namespace vsg
         const std::vector<VkQueueFamilyProperties>& getQueueFamilies() const { return _queueFamilies; }
 
     protected:
-
         virtual ~PhysicalDevice();
 
-        VkPhysicalDevice            _device;
-        int                         _graphicsFamily;
-        int                         _presentFamily;
-        int                         _computeFamily;
+        VkPhysicalDevice _device;
+        int _graphicsFamily;
+        int _presentFamily;
+        int _computeFamily;
 
         VkPhysicalDeviceProperties  _properties;
         VkPhysicalDeviceFeatures _features;
@@ -127,7 +127,7 @@ namespace vsg
         vsg::ref_ptr<Instance>      _instance;
         vsg::ref_ptr<Surface>       _surface;
         VkQueueFlags _queueFlags;
+
     };
 
-
-}
+} // namespace vsg

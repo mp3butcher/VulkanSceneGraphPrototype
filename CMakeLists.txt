@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.7)
 
 project(VulkanSceneGraphPrototype)
 
@@ -10,10 +10,6 @@ set(VSG_SOVERSION 0)
 # create the version header
 set(VSG_VERSION_HEADER "${PROJECT_BINARY_DIR}/include/vsg/core/Version.h")
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/vsg/core/Version.h.in" "${VSG_VERSION_HEADER}")
-
-
-# find the various depdendencies
-set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_SOURCE_DIR}/CMakeModules/")
 
 set(OUTPUT_BINDIR ${PROJECT_BINARY_DIR}/bin)
 set(OUTPUT_LIBDIR ${PROJECT_BINARY_DIR}/lib)
@@ -41,11 +37,6 @@ endif(WIN32)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${OUTPUT_BINDIR})
 
-# set compilation to use C++17
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
 # Change the default build type to Release
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build, options are: None Debug Release RelWithDebInfo MinSizeRel." FORCE)
@@ -65,25 +56,34 @@ foreach (flag ${VSG_WARNING_FLAGS})
 endforeach ()
 
 
-find_package(GLFW)
+find_package(glfw3)
 find_package(Vulkan)
 
-find_package(Threads)
 
-find_library(DL_LIBRARY dl)
-if(NOT DL_LIBRARY)
-    set(DL_LIBRARY "") # change from NOTFOUND to empty when passed to linker
+# create doxygen build target
+find_package(Doxygen QUIET)
+if (DOXYGEN_FOUND)
+    set(DOXYGEN_GENERATE_HTML YES)
+    set(DOXYGEN_GENERATE_MAN NO)
+
+    doxygen_add_docs(
+        docs
+        ${PROJECT_SOURCE_DIR}/include/vsg
+        COMMENT "Use doxygen to Generate html documentaion"
+    )
 endif()
 
-
+# add clobber build target to clear all the non git registered files/directories
 add_custom_target(clobber
     COMMAND git clean -d -f -x
 )
 
+# automatically buil_all_h build target to generate the include/vsg/all.h from the headers in the include/vsg/* directories
 add_custom_target(build_all_h
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules/build_all_h.cmake
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/build/build_all_h.cmake
 )
 
+# add cppcheck build target to provide static analysis of codebase
 find_program(CPPCHECK cppcheck)
 if (CPPCHECK)
     file(RELATIVE_PATH PATH_TO_SOURCE ${PROJECT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR} )
@@ -91,7 +91,7 @@ if (CPPCHECK)
         set(PATH_TO_SOURCE "${PATH_TO_SOURCE}/")
     endif()
 
-    set(CPPCHECK_SUPPRESION_LIST_FILE "${CMAKE_SOURCE_DIR}/CMakeModules/cppcheck-suppression-list.txt")
+    set(CPPCHECK_SUPPRESION_LIST_FILE "${CMAKE_SOURCE_DIR}/build/cppcheck-suppression-list.txt")
     set(CPPCHECK_SUPPRESION_LIST "--suppressions-list=${CPPCHECK_SUPPRESION_LIST_FILE}")
     set(CPPCHECK_EXTRA_OPTIONS "" CACHE STRING "additional commndline options to use when invoking cppcheck")
     add_custom_target(cppcheck
@@ -99,5 +99,15 @@ if (CPPCHECK)
     )
 endif()
 
-# src directory contains all the example applications etc.
+# add clang-foramt build target to enforce a standard code style guide.
+find_program(CLANGFORMAT clang-format)
+if (CLANGFORMAT)
+    add_custom_target(clang-format
+        COMMAND ${CLANGFORMAT} -i ${PATH_TO_SOURCE}include/vsg/*/*.h ${PATH_TO_SOURCE}src/vsg/*/*.cpp
+    )
+endif()
+
+#
+# src directory contains all the source of the vsg library
+#
 add_subdirectory(src/vsg)

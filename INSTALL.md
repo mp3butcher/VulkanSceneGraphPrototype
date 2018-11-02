@@ -1,7 +1,7 @@
 ## Prerequisites
 * C++17 compliant compiler i.e. g++ 7.3 or later, Clang 6.0 or later, Visual Studio S2017 or later.
 * [Vulkan](https://vulkan.lunarg.com/) 1.1 or later.
-* [CMake](https://www.cmake.org) 3.5 or later.
+* [CMake](https://www.cmake.org) 3.7 or later.
 * [GLFW](https://www.glfw.org)  3.3 or later.  The plan is to implement native Windowing support so this dependency will
  later be removed.
 
@@ -9,9 +9,9 @@ The above dependency versions are known to work so they've been set as the curre
 
 ---
 
-## Quick guide to building and install the VSG from the command line:
+## Quick guide to build and install the VSG from the command line:
 
-Command line instructions for default building of static library (.a/.lib) in source:
+Command line instructions for default build of static library (.a/.lib) in source:
 
     git clone https://github.com/robertosfield/VulkanSceneGraphPrototype.git
     cd VulkanSceneGraphPrototype
@@ -39,48 +39,52 @@ Once you have generated the build system using *cmake* as above, you can list th
 This lists the options:
 
     ... all (the default if no target is provided)
-    ... clean
-    ... depend
-    ... install/strip
-    ... install/local
-    ... install
-    ... build_all_h
-    ... rebuild_cache
-    ... clobber
-    ... edit_cache
-    ... cppcheck
-    ... list_install_components
-    ... vsg
-    
+	... clean
+	... depend
+	... install/strip
+	... install/local
+	... rebuild_cache
+	... clobber
+	... install
+	... docs
+	... build_all_h
+	... list_install_components
+	... cppcheck
+	... clang-format
+	... edit_cache
+	... vsg
+
 Most of these are standard options which you can look up in CMake and make documentation, the following are ones we've added so require explanation:
 
-    make clobber     # remove all files not part of the git repository - including all temporary CMake and build files.
-    make cppcheck    # run cppcheck on source and headers to generate a static analysis
-    make build_all_h # generate the include/vsg/all.h from all the files that match include/vsg/*/*.h
+    # remove all files not part of the git repository - including all temporary CMake and build files.
+    make clobber
+
+	# run cppcheck on headers & source to generate a static analysis
+    make cppcheck
+
+    # run clang-format on headers & source to format to style specified by .clang-format specification  
+    make clang-format
+
+    # generate the include/vsg/all.h from all the files that match include/vsg/*/*.h
+    make build_all_h
 
 ---
 
 ## Using the VSG within your own projects
 
-The project is currently a prototype that is undergoing continuous development so it isn't recommend to use as base for long term software development. At this point it's available for developers who want to test the bleeding edge and provide feedback on it's fitness for purpose.
+The project is currently a prototype that is undergoing continuous development so it isn't recommend to use as base for long term software development. At this point it's available for developers who want to test the bleeding edge and provide feedback on it's fitness for purpose. Following instructions assume your project uses CMake, which are this early stage in the project is the recommended route when using the VSG.
 
-To assist with setting up software to work with the VSG we provided [FindVSG.cmake](CMakeModules/FindVSG.cmake), [FindGLFW.cmake](CMakeModules/FindGLFW.cmake) and [FindVulkan.cmake](CMakeModules/FindVulkan.cmake) within the [VullkanSceneGraphPrototype/CMakeModules](CMakeModules) directory.  Feel free to copy these into your own project.
+To assist with setting up software to work with the VSG when you install the library a CMake package configuration file will be installed in the lib/cmake/vsg directory. Within your CMake CMakeLists.txt script to find the VSG related dependencies you'll need to add:
 
-Within your CMake CMakeLists.txt script to find the VSG related dependencies you'll need to add:
-
-   find_package(VSG)
-   find_package(GLFW)
-   find_package(Vulkan)
+	find_package(vsg)
 
 To select C++17 compilation you'll need:
 
-    set(CMAKE_CXX_STANDARD 17)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_CXX_EXTENSIONS OFF)
+	set_property(TARGET mytargetname PROPERTY CXX_STANDARD 17)
 
-To link your lib/application to required dependnecies you'll need:
+To link your lib/application to required dependencies you'll need:
 
-    target_link_libraries(mytargetname VSG::VSG GLFW::GLFW Vulkan::Vulkan)
+    target_link_libraries(mytargetname vsg::vsg glfw3 Vulkan::Vulkan)
 
-This will tell CMAke to set up all the appropriate include paths, libs and any definitions (such as the VSG_SHARED_LIBRARY #define that is required under Windows with shared library builds to select the correct declspec().)
+This will tell CMake to set up all the appropriate include paths, libs and any definitions (such as the VSG_SHARED_LIBRARY #define that is required under Windows with shared library builds to select the correct declspec().)
 

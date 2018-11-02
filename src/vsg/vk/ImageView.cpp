@@ -12,8 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/vk/ImageView.h>
 
-namespace vsg
-{
+using namespace vsg;
 
 ImageView::ImageView(VkImageView imageView, Device* device, Image* image, AllocationCallbacks* allocator) :
     _imageView(imageView),
@@ -46,7 +45,7 @@ ImageView::Result ImageView::create(Device* device, VkImage image, VkFormat form
 
     VkImageView view;
     VkResult result = vkCreateImageView(*device, &createInfo, allocator, &view);
-    if (result==VK_SUCCESS)
+    if (result == VK_SUCCESS)
     {
         return Result(new ImageView(view, device, nullptr, allocator));
     }
@@ -71,7 +70,7 @@ ImageView::Result ImageView::create(Device* device, Image* image, VkFormat forma
 
     VkImageView view;
     VkResult result = vkCreateImageView(*device, &createInfo, allocator, &view);
-    if (result==VK_SUCCESS)
+    if (result == VK_SUCCESS)
     {
         return Result(new ImageView(view, device, image, allocator));
     }
@@ -79,6 +78,4 @@ ImageView::Result ImageView::create(Device* device, Image* image, VkFormat forma
     {
         return Result("Error: Failed to create ImageView.", result);
     }
-}
-
 }

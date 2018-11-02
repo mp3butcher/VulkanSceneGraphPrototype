@@ -14,8 +14,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <array>
 
-namespace vsg
-{
+using namespace vsg;
 
 RenderPass::RenderPass(VkRenderPass renderPass, Device* device, AllocationCallbacks* allocator) :
     _renderPass(renderPass),
@@ -38,7 +37,6 @@ RenderPass::Result RenderPass::create(Device* device, VkFormat imageFormat, VkFo
     {
         return Result("Error: vsg::RenderPass::create(...) failed to create RenderPass, undefined Device.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
     }
-
 
     VkAttachmentDescription colorAttachment = {};
     colorAttachment.format = imageFormat;
@@ -74,7 +72,6 @@ RenderPass::Result RenderPass::create(Device* device, VkFormat imageFormat, VkFo
     subpass.pColorAttachments = &colorAttachmentRef;
     subpass.pDepthStencilAttachment = &depthAttachmentRef;
 
-
     VkSubpassDependency dependency = {};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
@@ -105,6 +102,4 @@ RenderPass::Result RenderPass::create(Device* device, VkFormat imageFormat, VkFo
     {
         return Result("Error: vsg::RenderPass::create(...) Failed to create VkRenderPass.", result);
     }
-}
-
 }

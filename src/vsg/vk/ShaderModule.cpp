@@ -12,8 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/vk/ShaderModule.h>
 
-namespace vsg
-{
+using namespace vsg;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -48,7 +47,7 @@ Shader::Result Shader::read(VkShaderStageFlagBits stage, const std::string& entr
 //
 // ShaderModule
 //
-ShaderModule::ShaderModule(VkShaderModule shaderModule, Device* device, Shader* shader, AllocationCallbacks* allocator):
+ShaderModule::ShaderModule(VkShaderModule shaderModule, Device* device, Shader* shader, AllocationCallbacks* allocator) :
     _shaderModule(shaderModule),
     _device(device),
     _shader(shader),
@@ -86,6 +85,4 @@ ShaderModule::Result ShaderModule::create(Device* device, Shader* shader, Alloca
     {
         return Result("Error: vsg::ShaderModule::create(...) failed to create shader module.", result);
     }
-}
-
 }

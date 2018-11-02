@@ -13,8 +13,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/vk/DescriptorSet.h>
 #include <vsg/vk/State.h>
 
-namespace vsg
-{
+using namespace vsg;
 
 DescriptorSet::DescriptorSet(VkDescriptorSet descriptorSet, Device* device, DescriptorPool* descriptorPool, DescriptorSetLayout* descriptorSetLayout, const Descriptors& descriptors) :
     _descriptorSet(descriptorSet),
@@ -66,7 +65,7 @@ void DescriptorSet::assign(const Descriptors& descriptors)
     _descriptors = descriptors;
 
     std::vector<VkWriteDescriptorSet> descriptorWrites(_descriptors.size());
-    for (size_t i=0; i<_descriptors.size(); ++i)
+    for (size_t i = 0; i < _descriptors.size(); ++i)
     {
         _descriptors[i]->assignTo(descriptorWrites[i], _descriptorSet);
     }
@@ -89,7 +88,4 @@ void BindDescriptorSets::popFrom(State& state) const
 void BindDescriptorSets::dispatch(CommandBuffer& commandBuffer) const
 {
     vkCmdBindDescriptorSets(commandBuffer, _bindPoint, *_pipelineLayout, 0, _vkDescriptorSets.size(), _vkDescriptorSets.data(), 0, nullptr);
-}
-
-
 }

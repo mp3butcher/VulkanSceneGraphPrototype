@@ -14,8 +14,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <set>
 
-namespace vsg
-{
+using namespace vsg;
 
 Device::Device(
     PhysicalDevice* physicalDevice, AllocationCallbacks* allocator) :
@@ -85,59 +84,6 @@ bool Device::vkCreate() {
 
 }
 
-Device::Result Device::create(PhysicalDevice* physicalDevice, Names& layers, Names& deviceExtensions, AllocationCallbacks* allocator)
-{
-    if (!physicalDevice)
-    {
-        return Device::Result("Error: vsg::Device::create(...) failed to create logical device, undefined PhysicalDevice.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
-    }
-
-    std::set<int> uniqueQueueFamiles;
-    if (physicalDevice->getGraphicsFamily()>=0) uniqueQueueFamiles.insert(physicalDevice->getGraphicsFamily());
-    if (physicalDevice->getComputeFamily()>=0) uniqueQueueFamiles.insert(physicalDevice->getComputeFamily());
-    if (physicalDevice->getPresentFamily()>=0) uniqueQueueFamiles.insert(physicalDevice->getPresentFamily());
-
-    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-
-    float queuePriority = 1.0f;
-    for (int queueFamily : uniqueQueueFamiles)
-    {
-        VkDeviceQueueCreateInfo queueCreateInfo = {};
-        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queueCreateInfo.queueFamilyIndex = queueFamily;
-        queueCreateInfo.queueCount = 1;
-        queueCreateInfo.pQueuePriorities = &queuePriority;
-        queueCreateInfos.push_back(queueCreateInfo);
-    }
-
-    VkPhysicalDeviceFeatures deviceFeatures = {};
-    deviceFeatures.samplerAnisotropy = VK_TRUE;
-
-    VkDeviceCreateInfo createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-
-    createInfo.queueCreateInfoCount = queueCreateInfos.size();
-    createInfo.pQueueCreateInfos = queueCreateInfos.empty() ? nullptr : queueCreateInfos.data();
-
-    createInfo.pEnabledFeatures = &deviceFeatures;
-
-    createInfo.enabledExtensionCount = deviceExtensions.size();
-    createInfo.ppEnabledExtensionNames = deviceExtensions.empty() ? nullptr : deviceExtensions.data();
-
-    createInfo.enabledLayerCount = layers.size();
-    createInfo.ppEnabledLayerNames = layers.empty() ? nullptr : layers.data();
-
-    VkDevice device;
-    VkResult result = vkCreateDevice(*physicalDevice, &createInfo, allocator, &device);
-    if (result == VK_SUCCESS)
-    {
-        //return Result(new Device(device, physicalDevice, allocator));
-    }
-    else
-    {
-        return Device::Result("Error: vsg::Device::create(...) failed to create logical device.", result);
-    }
-}
 VkQueue Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex)
 {
     VkQueue queue;
@@ -152,4 +98,3 @@ Queue * Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex){
 */
 
 
-}

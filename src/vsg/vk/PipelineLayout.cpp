@@ -12,8 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/vk/PipelineLayout.h>
 
-namespace vsg
-{
+using namespace vsg;
 
 PipelineLayout::PipelineLayout(VkPipelineLayout pipelineLayout, const DescriptorSetLayouts& descriptorSetLayouts, Device* device, AllocationCallbacks* allocator) :
     _pipelineLayout(pipelineLayout),
@@ -39,7 +38,7 @@ PipelineLayout::Result PipelineLayout::create(Device* device, const DescriptorSe
     }
 
     std::vector<VkDescriptorSetLayout> layouts;
-    for(auto dsl : descriptorSetLayouts) layouts.push_back(*dsl);
+    for (auto dsl : descriptorSetLayouts) layouts.push_back(*dsl);
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo;
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -48,7 +47,6 @@ PipelineLayout::Result PipelineLayout::create(Device* device, const DescriptorSe
     pipelineLayoutInfo.pSetLayouts = layouts.data();
     pipelineLayoutInfo.pushConstantRangeCount = pushConstantRanges.size();
     pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges.data();
-
 
     VkPipelineLayout pipelineLayout;
     VkResult result = vkCreatePipelineLayout(*device, &pipelineLayoutInfo, allocator, &pipelineLayout);
@@ -60,6 +58,4 @@ PipelineLayout::Result PipelineLayout::create(Device* device, const DescriptorSe
     {
         return Result("Error: Failed to create PipelineLayout.", result);
     }
-}
-
 }

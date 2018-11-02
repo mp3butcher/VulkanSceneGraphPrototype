@@ -12,8 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/vk/Framebuffer.h>
 
-namespace vsg
-{
+using namespace vsg;
 
 Framebuffer::Framebuffer(VkFramebuffer framebuffer, Device* device, AllocationCallbacks* allocator) :
     _framebuffer(framebuffer),
@@ -30,7 +29,7 @@ Framebuffer::~Framebuffer()
     }
 }
 
-Framebuffer::Result Framebuffer::create(Device* device, VkFramebufferCreateInfo& framebufferInfo, AllocationCallbacks*  allocator)
+Framebuffer::Result Framebuffer::create(Device* device, VkFramebufferCreateInfo& framebufferInfo, AllocationCallbacks* allocator)
 {
     if (!device)
     {
@@ -38,7 +37,7 @@ Framebuffer::Result Framebuffer::create(Device* device, VkFramebufferCreateInfo&
     }
 
     VkFramebuffer framebuffer;
-    VkResult result = vkCreateFramebuffer(*device,&framebufferInfo, allocator, &framebuffer);
+    VkResult result = vkCreateFramebuffer(*device, &framebufferInfo, allocator, &framebuffer);
     if (result == VK_SUCCESS)
     {
         return Result(new Framebuffer(framebuffer, device, allocator));
@@ -47,7 +46,4 @@ Framebuffer::Result Framebuffer::create(Device* device, VkFramebufferCreateInfo&
     {
         return Result("Error: vsg::Framebuffer::create(...) Failed to create VkFramebuffer.", result);
     }
-
-}
-
 }

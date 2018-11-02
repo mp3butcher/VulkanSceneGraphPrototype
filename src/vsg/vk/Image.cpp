@@ -12,8 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/vk/Image.h>
 
-namespace vsg
-{
+using namespace vsg;
 
 Image::Image(VkImage image, Device* device, AllocationCallbacks* allocator) :
     _image(image),
@@ -49,12 +48,11 @@ Image::Result Image::create(Device* device, const VkImageCreateInfo& createImage
     }
 }
 
-
 ImageMemoryBarrier::ImageMemoryBarrier(VkAccessFlags in_srcAccessMask, VkAccessFlags in_destAccessMask,
-                    VkImageLayout in_oldLayout, VkImageLayout in_newLayout,
-                    Image* in_image) :
-                    VkImageMemoryBarrier{},
-                    _image(in_image)
+                                       VkImageLayout in_oldLayout, VkImageLayout in_newLayout,
+                                       Image* in_image) :
+    VkImageMemoryBarrier{},
+    _image(in_image)
 {
     sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     oldLayout = in_oldLayout;
@@ -78,11 +76,9 @@ ImageMemoryBarrier::~ImageMemoryBarrier()
 void ImageMemoryBarrier::cmdPiplineBarrier(VkCommandBuffer commandBuffer, VkPipelineStageFlags sourceStage, VkPipelineStageFlags destinationStage)
 {
     vkCmdPipelineBarrier(commandBuffer,
-                        sourceStage, destinationStage,
-                        0,
-                        0, nullptr,
-                        0, nullptr,
-                        1, static_cast<VkImageMemoryBarrier*>(this));
-}
-
+                         sourceStage, destinationStage,
+                         0,
+                         0, nullptr,
+                         0, nullptr,
+                         1, static_cast<VkImageMemoryBarrier*>(this));
 }

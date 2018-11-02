@@ -26,8 +26,6 @@ namespace vsg
 
         //safe get
        // Device* get(){vkUpdate();return this;}
-        using Result = vsg::Result<Device, VkResult, VK_SUCCESS>;
-                static Result create(PhysicalDevice* physicalDevice, Names& layers, Names& deviceExtensions, AllocationCallbacks* allocator = nullptr);
 
         inline const VkDeviceCreateFlags& getDeviceCreateFlags() const {return _deviceCreateInfo.flags;}
         inline void setDeviceCreateFlags(const VkDeviceCreateFlags&f) {if(_deviceCreateInfo.flags==f)return; _deviceCreateInfo.flags=f; vkDirty();}
@@ -54,29 +52,27 @@ namespace vsg
        ///assert !vkDirty for the following
         operator VkDevice() const { return _device; }
         VkDevice getDevice() const { return _device; }
-       VkQueue getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex=0);
         // Queue * getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex=0);
+        VkQueue getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex = 0);
 
     protected:
-
         virtual ~Device();
         virtual bool vkCreate();
         virtual bool vkDestroy();
         ///createstucture for managed
-        VkDeviceCreateInfo                  _deviceCreateInfo = {};
+        VkDeviceCreateInfo _deviceCreateInfo = {};
         ///..and its pointers proxies
-        VkPhysicalDeviceFeatures            _deviceFeatures= {};
+        VkPhysicalDeviceFeatures  _deviceFeatures= {};
         std::vector<VkDeviceQueueCreateInfo> _queueCreateInfos;
-        Names                               _layers;
-        Names                               _deviceExtensions;
+        Names _layers;
+        Names _deviceExtensions;
 
-        vsg::ref_ptr<PhysicalDevice>        _physicalDevice;
-        vsg::ref_ptr<AllocationCallbacks>   _allocator;
+        vsg::ref_ptr<PhysicalDevice> _physicalDevice;
+        vsg::ref_ptr<AllocationCallbacks> _allocator;
         ///managed
-        VkDevice                            _device;
+        VkDevice _device;
         using QueueVec =std::vector<vsg::ref_ptr<Queue> > ;
         std::vector<QueueVec> _perfamilyQueueVector;
-
 
     };
     class VSG_DECLSPEC Queue : public Inherit<vkObjectProxy, Queue>
@@ -102,4 +98,4 @@ namespace vsg
         VkQueue _queue;
 };
 
-}
+} // namespace vsg

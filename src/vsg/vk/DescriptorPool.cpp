@@ -12,8 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/vk/DescriptorPool.h>
 
-namespace vsg
-{
+using namespace vsg;
 
 DescriptorPool::DescriptorPool(VkDescriptorPool descriptorPool, Device* device, AllocationCallbacks* allocator) :
     _descriptorPool(descriptorPool),
@@ -47,7 +46,7 @@ DescriptorPool::Result DescriptorPool::create(Device* device, uint32_t maxSets, 
     poolInfo.poolSizeCount = descriptorPoolSizes.size();
     poolInfo.pPoolSizes = descriptorPoolSizes.data();
     poolInfo.maxSets = maxSets;
-    poolInfo.flags =VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT; // will we need VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT later?
+    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT; // will we need VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT later?
 
     VkDescriptorPool descriptorPool;
     VkResult result = vkCreateDescriptorPool(*device, &poolInfo, allocator, &descriptorPool);
@@ -59,6 +58,4 @@ DescriptorPool::Result DescriptorPool::create(Device* device, uint32_t maxSets, 
     {
         return Result("Error: Failed to create DescriptorPool.", result);
     }
-}
-
 }

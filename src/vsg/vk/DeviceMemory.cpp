@@ -10,14 +10,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/vk/DeviceMemory.h>
 #include <vsg/vk/Buffer.h>
+#include <vsg/vk/DeviceMemory.h>
 #include <vsg/vk/Image.h>
 
 #include <cstring>
 
-namespace vsg
-{
+using namespace vsg;
 
 DeviceMemory::DeviceMemory(VkDeviceMemory deviceMemory, Device* device, AllocationCallbacks* allocator) :
     _deviceMemory(deviceMemory),
@@ -47,11 +46,11 @@ DeviceMemory::Result DeviceMemory::create(Device* device, const VkMemoryRequirem
     VkPhysicalDeviceMemoryProperties memProperties;
     vkGetPhysicalDeviceMemoryProperties(*(device->getPhysicalDevice()), &memProperties);
     uint32_t i;
-    for (i=0; i< memProperties.memoryTypeCount; ++i)
+    for (i = 0; i < memProperties.memoryTypeCount; ++i)
     {
-        if ((typeFilter & (1<<i)) && (memProperties.memoryTypes[i].propertyFlags & properties)==properties) break;
+        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) break;
     }
-    if (i>=memProperties.memoryTypeCount)
+    if (i >= memProperties.memoryTypeCount)
     {
         return DeviceMemory::Result("Error: vsg::DeviceMemory::create(...) failed to create DeviceMemory, not usage memory type found.", VK_ERROR_FORMAT_NOT_SUPPORTED);
     }
@@ -100,8 +99,6 @@ void DeviceMemory::unmap()
     vkUnmapMemory(*_device, _deviceMemory);
 }
 
-
-
 void DeviceMemory::copy(VkDeviceSize offset, VkDeviceSize size, void* src_data)
 {
     // should we have checks against buffer having enough memory for copied data?
@@ -109,7 +106,7 @@ void DeviceMemory::copy(VkDeviceSize offset, VkDeviceSize size, void* src_data)
     void* buffer_data;
     map(offset, size, 0, &buffer_data);
 
-        std::memcpy(buffer_data, src_data, (size_t)size);
+    std::memcpy(buffer_data, src_data, (size_t)size);
 
     unmap();
 }
@@ -117,7 +114,4 @@ void DeviceMemory::copy(VkDeviceSize offset, VkDeviceSize size, void* src_data)
 void DeviceMemory::copy(VkDeviceSize offset, Data* data)
 {
     copy(offset, data->dataSize(), data->dataPointer());
-}
-
-
 }

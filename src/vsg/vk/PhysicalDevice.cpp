@@ -11,15 +11,49 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/vk/PhysicalDevice.h>
+#include <iostream>
 
 namespace vsg
 {
+
+std::string vkErrorString(VkResult errorCode)
+   {
+       switch (errorCode)
+       {
+           // todo : update to SDK 0.10.1
+#define STR(r) case VK_ ##r: return #r
+           STR(NOT_READY);
+           STR(TIMEOUT);
+           STR(EVENT_SET);
+           STR(EVENT_RESET);
+           STR(INCOMPLETE);
+           STR(ERROR_OUT_OF_HOST_MEMORY);
+           STR(ERROR_OUT_OF_DEVICE_MEMORY);
+           STR(ERROR_INITIALIZATION_FAILED);
+           STR(ERROR_DEVICE_LOST);
+           STR(ERROR_MEMORY_MAP_FAILED);
+           STR(ERROR_LAYER_NOT_PRESENT);
+           STR(ERROR_EXTENSION_NOT_PRESENT);
+           STR(ERROR_INCOMPATIBLE_DRIVER);
+#undef STR
+       default:
+           return "UNKNOWN_ERROR";
+       }
+}
+void vkObjectProxy::VSG_CHECK_RESULT(VkResult res)																				\
+{																										\
+    if (res != VK_SUCCESS)																				\
+    {																									\
+        std::cerr << "Fatal : VkResult is \"" << vkErrorString(res) << "\" in " << __FILE__ << " at line " << __LINE__ << std::endl; \
+        //assert(res == VK_SUCCESS);
+    }																									\
+}
 PhysicalDevice::PhysicalDevice(Instance* instance, Surface* surface, int graphicsFamily, int presentFamily, int computeFamily) :
     _graphicsFamily(graphicsFamily),
     _presentFamily(presentFamily),
     _computeFamily(computeFamily),
     _instance(instance),
-    _surface(surface),_device(0)
+    _surface(surface),_device(VK_NULL_HANDLE)
 {
 
 }

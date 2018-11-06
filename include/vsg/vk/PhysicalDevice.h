@@ -33,6 +33,7 @@ namespace vsg
             for (auto item =_childproxies.begin(); item != _childproxies.end();++item )if(*item==v) _childproxies.erase(item);
          }
     public:
+        static void VSG_CHECK_RESULT(VkResult res)	;
         //be carefull with setParent should only be called when no vkObject have been allocated
         inline const vkObjectProxy* getOwner() const {return _parentproxy;}
         inline void setOwner(vkObjectProxy*v){if(_parentproxy!=v){if(_parentproxy)_parentproxy->removeDependant(this);_parentproxy=v;if(v){v->removeDependant(this);v->addDependant(this);}}}
@@ -40,7 +41,7 @@ namespace vsg
         inline void vkDirty(){ if(_state&DIRTY)return; _state|=DIRTY; for(auto it : _childproxies)it->vkDirty();}
         inline void vkUpdate(){
             //ascent (ascend to the first dirty)
-            vkObjectProxy *firstdirt,*cur=this;
+            vkObjectProxy *firstdirt=nullptr,*cur=this;
             while(cur){if(cur->_state&DIRTY)firstdirt=cur;cur=cur->_parentproxy;}
 
             //descent

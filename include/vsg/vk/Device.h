@@ -86,9 +86,9 @@ namespace vsg
         }
         inline const Device* getDevice() const {return _device;}
         inline void setDevice( Device*f) {if(_device==f)return; _device=f; vkDirty();}
-        inline const uint32_t getQueueFamilyIndex() const {return _queueFamilyIndex;}
+        inline uint32_t getQueueFamilyIndex() const {return _queueFamilyIndex;}
         inline void setQueueFamilyIndex(const uint32_t &f) {if(_queueFamilyIndex==f)return; _queueFamilyIndex=f; vkDirty();}
-        inline const uint32_t getIndex() const {return _queueIndex;}
+        inline uint32_t getIndex() const {return _queueIndex;}
         inline void setIndex(const uint32_t &f) {if(_queueIndex==f)return; _queueIndex=f; vkDirty();}
 
         operator VkQueue(){return _queue;}

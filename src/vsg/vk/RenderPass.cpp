@@ -15,31 +15,62 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <array>
 
 using namespace vsg;
-
+RenderPass::RenderPass(Device* device, AllocationCallbacks* allocator ):
+    _renderPass(VK_NULL_HANDLE),
+    _device(device),
+    _allocator(allocator)
+{
+    setOwner(device);
+}
+/*
 RenderPass::RenderPass(VkRenderPass renderPass, Device* device, AllocationCallbacks* allocator) :
     _renderPass(renderPass),
     _device(device),
     _allocator(allocator)
 {
 }
-
+*/
 RenderPass::~RenderPass()
 {
-    if (_renderPass)
+vkDestroy();
+}
+bool RenderPass::vkDestroy()
+{   if (_renderPass)
     {
         vkDestroyRenderPass(*_device, _renderPass, _allocator);
     }
 }
-
-RenderPass::Result RenderPass::create(Device* device, VkFormat imageFormat, VkFormat depthFormat, AllocationCallbacks* allocator)
+//RenderPass::Result RenderPass::create(Device* device, VkFormat imageFormat, VkFormat depthFormat, AllocationCallbacks* allocator)
+bool RenderPass::vkCreate()
 {
-    if (!device)
+    if (!_device)
     {
-        return Result("Error: vsg::RenderPass::create(...) failed to create RenderPass, undefined Device.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
+        return false;//Result("Error: vsg::RenderPass::create(...) failed to create RenderPass, undefined Device.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
     }
+    std::vector<VkSubpassDescription> subpasses;
+    std::vector<VkSubpassDependency> dependencies;
+
+    if(!_subpasses.empty()){
+        for(auto subpass: _subpasses) subpasses.push_back(*subpass);
+        for(auto dep: _depends) dependencies.push_back(*dep);
+        if(_depends.empty()){
+        VkSubpassDependency dependency = {};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass = 0;
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask = 0;
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+       // _attachments.push_back(colorAttachment);
+      //  _attachments.push_back(depthAttachment);
+        dependencies.push_back(dependency);
+        }
+    }else
+    {
+        //create a default render pass
 
     VkAttachmentDescription colorAttachment = {};
-    colorAttachment.format = imageFormat;
+    colorAttachment.format = _imageFormat;
     colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -49,7 +80,7 @@ RenderPass::Result RenderPass::create(Device* device, VkFormat imageFormat, VkFo
     colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     VkAttachmentDescription depthAttachment = {};
-    depthAttachment.format = depthFormat;
+    depthAttachment.format = _depthFormat;
     depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
     depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -79,27 +110,29 @@ RenderPass::Result RenderPass::create(Device* device, VkFormat imageFormat, VkFo
     dependency.srcAccessMask = 0;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-    std::array<VkAttachmentDescription, 2> attachments{{colorAttachment, depthAttachment}};
+   // _attachments.push_back(colorAttachment);
+  //  _attachments.push_back(depthAttachment);
+    dependencies.push_back(dependency);
+    subpasses.push_back(subpass );
+}
 
     VkRenderPassCreateInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = attachments.size();
-    renderPassInfo.pAttachments = attachments.data();
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-    renderPassInfo.dependencyCount = 1;
-    renderPassInfo.pDependencies = &dependency;
+    renderPassInfo.attachmentCount = _attachments.size();
+    renderPassInfo.pAttachments = _attachments.data();
+    renderPassInfo.subpassCount = subpasses.size();
+    renderPassInfo.pSubpasses = subpasses.data();
+    renderPassInfo.dependencyCount = dependencies.size();
+    renderPassInfo.pDependencies = dependencies.data();
 
-    VkRenderPass renderPass;
-    VkResult result = vkCreateRenderPass(*device, &renderPassInfo, allocator, &renderPass);
-
+    VkResult result = vkCreateRenderPass(*_device, &renderPassInfo, _allocator, &_renderPass);
+VSG_CHECK_RESULT(result);
     if (result == VK_SUCCESS)
     {
-        return Result(new RenderPass(renderPass, device, allocator));
+        return true;//Result(new RenderPass(renderPass, device, allocator));
     }
     else
     {
-        return Result("Error: vsg::RenderPass::create(...) Failed to create VkRenderPass.", result);
+        return false;//Result("Error: vsg::RenderPass::create(...) Failed to create VkRenderPass.", result);
     }
 }

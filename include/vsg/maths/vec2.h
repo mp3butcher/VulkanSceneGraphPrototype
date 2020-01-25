@@ -23,6 +23,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #    pragma clang diagnostic ignored "-Wnested-anon-types"
 #endif
 
+#include <vsg/core/type_name.h>
+
+#include <cmath>
+
 namespace vsg
 {
 
@@ -63,17 +67,78 @@ namespace vsg
         template<typename R>
         t_vec2& operator=(const t_vec2<R>& rhs)
         {
-            value[0] = rhs[0];
-            value[1] = rhs[1];
+            value[0] = static_cast<value_type>(rhs[0]);
+            value[1] = static_cast<value_type>(rhs[1]);
             return *this;
         }
 
         T* data() { return value; }
         const T* data() const { return value; }
+
+        void set(value_type in_x, value_type in_y)
+        {
+            x = in_x;
+            y = in_y;
+        }
     };
 
     using vec2 = t_vec2<float>;
     using dvec2 = t_vec2<double>;
+    using ubvec2 = t_vec2<std::uint8_t>;
+
+    VSG_type_name(vsg::vec2);
+    VSG_type_name(vsg::dvec2);
+    VSG_type_name(vsg::ubvec2);
+
+    template<typename T>
+    constexpr t_vec2<T> operator-(t_vec2<T> const& lhs, t_vec2<T> const& rhs)
+    {
+        return t_vec2<T>(lhs[0] - rhs[0], lhs[1] - rhs[1]);
+    }
+
+    template<typename T>
+    constexpr t_vec2<T> operator-(t_vec2<T> const& v)
+    {
+        return t_vec2<T>(-v[0], -v[1]);
+    }
+
+    template<typename T>
+    constexpr t_vec2<T> operator+(t_vec2<T> const& lhs, t_vec2<T> const& rhs)
+    {
+        return t_vec2<T>(lhs[0] + rhs[0], lhs[1] + rhs[1]);
+    }
+
+    template<typename T>
+    constexpr t_vec2<T> operator*(t_vec2<T> const& lhs, T rhs)
+    {
+        return t_vec2<T>(lhs[0] * rhs, lhs[1] * rhs);
+    }
+
+    template<typename T>
+    constexpr t_vec2<T> operator/(t_vec2<T> const& lhs, T rhs)
+    {
+        T inv = static_cast<T>(1.0) / rhs;
+        return t_vec2<T>(lhs[0] * inv, lhs[1] * inv);
+    }
+
+    template<typename T>
+    constexpr T length(t_vec2<T> const& v)
+    {
+        return std::sqrt(v[0] * v[0] + v[1] * v[1]);
+    }
+
+    template<typename T>
+    constexpr t_vec2<T> normalize(t_vec2<T> const& v)
+    {
+        T inverse_len = static_cast<T>(1.0) / length(v);
+        return t_vec2<T>(v[0] * inverse_len, v[1] * inverse_len);
+    }
+
+    template<typename T>
+    constexpr T dot(t_vec2<T> const& lhs, t_vec2<T> const& rhs)
+    {
+        return lhs[0] * rhs[0] + lhs[1] * rhs[1] + lhs[2] * rhs[2];
+    }
 
 } // namespace vsg
 

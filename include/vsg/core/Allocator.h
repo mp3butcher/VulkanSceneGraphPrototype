@@ -17,7 +17,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/core/Visitor.h>
 #include <vsg/core/ref_ptr.h>
 
-#include <vsg/utils/stream.h>
+#include <vsg/io/stream.h>
 
 #include <vsg/traversals/CullTraversal.h>
 #include <vsg/traversals/DispatchTraversal.h>
@@ -40,6 +40,53 @@ namespace vsg
         virtual void* allocate(std::size_t size);
 
         virtual void deallocate(const void* ptr, std::size_t size = 0);
+
+        template<typename T, typename... Args>
+        T* newObject(Args... args)
+        {
+            void* ptr = allocate(sizeof(T));
+            if (ptr)
+            {
+                T* t = new (ptr) T(args...);
+                return t;
+            }
+            return nullptr;
+        }
+
+        template<typename T>
+        void deleteObject(T* ptr)
+        {
+            if (ptr)
+            {
+                ptr->~T();
+                deallocate(ptr, sizeof(T));
+            }
+        }
+
+        template<typename T>
+        T* newArray(size_t size)
+        {
+            void* ptr = allocate(size * sizeof(T));
+            if (ptr)
+            {
+                T* t = new (ptr) T[size];
+                return t;
+            }
+            return nullptr;
+        }
+
+        template<typename T>
+        void deleteArray(T* ptr, size_t size)
+        {
+            if (ptr)
+            {
+                for (size_t i = 0; i < size; ++i)
+                {
+                    (ptr[i]).~T();
+                }
+                deallocate(ptr, size * sizeof(T));
+            }
+        }
 
         Auxiliary* getOrCreateSharedAuxiliary();
 

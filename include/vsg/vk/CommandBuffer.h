@@ -13,8 +13,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/vk/CommandPool.h>
+#include <vsg/vk/ComputePipeline.h>
 #include <vsg/vk/Fence.h>
-#include <vsg/vk/Pipeline.h>
+#include <vsg/vk/GraphicsPipeline.h>
 
 namespace vsg
 {
@@ -36,14 +37,11 @@ namespace vsg
         Device* getDevice() { return _device; }
         const Device* getDevice() const { return _device; }
 
-        void setCurrentPipeline(const Pipeline* pipeline)
-        {
-            _currentPipeline = pipeline;
-            _currentPipelineLayout = (pipeline != nullptr) ? pipeline->getPipelineLayout() : nullptr;
-        }
+        CommandPool* getCommandPool() { return _commandPool; }
+        const CommandPool* getCommandPool() const { return _commandPool; }
 
-        const Pipeline* getCurrentPipeline() const { return _currentPipeline; }
-        const PipelineLayout* getCurrentPipelineLayout() const { return _currentPipelineLayout; }
+        void setCurrentPipelineLayout(VkPipelineLayout pipelineLayout) { _currentPipelineLayout = pipelineLayout; }
+        VkPipelineLayout getCurrentPipelineLayout() const { return _currentPipelineLayout; }
 
     protected:
         virtual ~CommandBuffer();
@@ -53,8 +51,7 @@ namespace vsg
 
         ref_ptr<Device> _device;
         ref_ptr<CommandPool> _commandPool;
-        ref_ptr<const Pipeline> _currentPipeline;
-        ref_ptr<const PipelineLayout> _currentPipelineLayout;
+        VkPipelineLayout _currentPipelineLayout;
     };
 
     template<typename F>

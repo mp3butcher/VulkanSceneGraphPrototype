@@ -15,6 +15,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/core/Array.h>
 #include <vsg/vk/Device.h>
 
+#include <map>
+
 namespace vsg
 {
     class Buffer;
@@ -23,7 +25,7 @@ namespace vsg
     class VSG_DECLSPEC DeviceMemory : public Inherit<Object, DeviceMemory>
     {
     public:
-        DeviceMemory(VkDeviceMemory DeviceMemory, Device* device, AllocationCallbacks* allocator = nullptr);
+        DeviceMemory(VkDeviceMemory DeviceMemory, const VkMemoryRequirements& memRequirements, Device* device, AllocationCallbacks* allocator = nullptr);
 
         using Result = vsg::Result<DeviceMemory, VkResult, VK_SUCCESS>;
         static Result create(Device* device, const VkMemoryRequirements& memRequirements, VkMemoryPropertyFlags properties, AllocationCallbacks* allocator = nullptr);
@@ -31,8 +33,8 @@ namespace vsg
         static Result create(Device* device, Buffer* buffer, VkMemoryPropertyFlags properties, AllocationCallbacks* allocator = nullptr);
         static Result create(Device* device, Image* image, VkMemoryPropertyFlags properties, AllocationCallbacks* allocator = nullptr);
 
-        void copy(VkDeviceSize offset, VkDeviceSize size, void* src_data);
-        void copy(VkDeviceSize offset, Data* data);
+        void copy(VkDeviceSize offset, VkDeviceSize size, const void* src_data);
+        void copy(VkDeviceSize offset, const Data* data);
 
         /// wrapper of vkMapMemory
         VkResult map(VkDeviceSize offset, VkDeviceSize size, VkMemoryMapFlags flags, void** ppData);
@@ -40,30 +42,44 @@ namespace vsg
 
         operator VkDeviceMemory() const { return _deviceMemory; }
 
+        const VkMemoryRequirements& getMemoryRequirements() { return _memoryRequirements; }
+
+        using OptionalMemoryOffset = std::pair<bool, VkDeviceSize>;
+        OptionalMemoryOffset reserve(VkDeviceSize size);
+
+        bool full() const { return _availableMemory.empty(); }
+
     protected:
         virtual ~DeviceMemory();
 
         VkDeviceMemory _deviceMemory;
+        VkMemoryRequirements _memoryRequirements;
         ref_ptr<Device> _device;
         ref_ptr<AllocationCallbacks> _allocator;
+
+        using MemorySlots = std::multimap<VkDeviceSize, VkDeviceSize>;
+        using MemorySlot = MemorySlots::value_type;
+        MemorySlots _availableMemory;
     };
 
     template<class T>
-    class MappedArray : public T
+    class MappedData : public T
     {
     public:
         using value_type = typename T::value_type;
 
-        MappedArray(DeviceMemory* deviceMemory, VkDeviceSize offset, size_t numElements, VkMemoryMapFlags flags = 0) :
+        template<typename... Args>
+        MappedData(DeviceMemory* deviceMemory, VkDeviceSize offset, VkMemoryMapFlags flags, Args&... args) :
             T(),
             _deviceMemory(deviceMemory)
         {
             void* pData;
+            size_t numElements = (args * ...);
             _deviceMemory->map(offset, numElements * sizeof(value_type), flags, &pData);
-            T::assign(numElements, static_cast<value_type*>(pData));
+            T::assign(args..., static_cast<value_type*>(pData));
         }
 
-        virtual ~MappedArray()
+        virtual ~MappedData()
         {
             T::dataRelease(); // make sure that the Array doesn't delete this memory
             _deviceMemory->unmap();

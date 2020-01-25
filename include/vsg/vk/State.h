@@ -15,15 +15,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/vk/BindIndexBuffer.h>
 #include <vsg/vk/BindVertexBuffers.h>
 #include <vsg/vk/CommandBuffer.h>
+#include <vsg/vk/ComputePipeline.h>
 #include <vsg/vk/DescriptorSet.h>
-#include <vsg/vk/Pipeline.h>
+#include <vsg/vk/GraphicsPipeline.h>
 #include <vsg/vk/PushConstants.h>
 
 #include <map>
 #include <stack>
 
+
 namespace vsg
 {
+
+    #define USE_DOUBLE_MATRIX_STACK 0
+    #define USE_COMPUTE_PIPELIE_STACK 1
+    #define USE_PUSH_CONSTNANT_STACK 1
+
     template<class T>
     class StateStack
     {
@@ -43,7 +50,7 @@ namespace vsg
         void pop()
         {
             stack.pop();
-            dirty = true;
+            dirty = !stack.empty();
         }
         size_t size() const { return stack.size(); }
         T& top() { return stack.top(); }
@@ -51,9 +58,110 @@ namespace vsg
 
         inline void dispatch(CommandBuffer& commandBuffer)
         {
-            if (dirty && !stack.empty())
+            if (dirty)
             {
                 stack.top()->dispatch(commandBuffer);
+                dirty = false;
+            }
+        }
+    };
+
+
+    class MatrixStack
+    {
+    public:
+        MatrixStack(uint32_t in_offset = 0) :
+            offset(in_offset)
+        {
+            // make sure there is an initial matrix
+            matrixStack.emplace(mat4());
+            dirty = true;
+        }
+
+#if USE_DOUBLE_MATRIX_STACK
+        using value_type = double;
+        using alternative_type = float;
+#else
+        using value_type = float;
+        using alternative_type = double;
+#endif
+
+        using Matrix = t_mat4<value_type>;
+        using AlternativeMatrix = t_mat4<alternative_type>;
+
+        std::stack<Matrix> matrixStack;
+        VkShaderStageFlags stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        uint32_t offset = 0;
+        bool dirty = false;
+
+        inline void set(const mat4& matrix)
+        {
+            matrixStack = {};
+            matrixStack.emplace(matrix);
+            dirty = true;
+        }
+
+        inline void set(const dmat4& matrix)
+        {
+            matrixStack = {};
+            matrixStack.emplace(matrix);
+            dirty = true;
+        }
+
+        inline void push(const mat4& matrix)
+        {
+            matrixStack.emplace(matrix);
+            dirty = true;
+        }
+        inline void push(const dmat4& matrix)
+        {
+            matrixStack.emplace(matrix);
+            dirty = true;
+        }
+
+        inline void pushAndPosMult(const Matrix& matrix)
+        {
+            matrixStack.emplace( matrixStack.top() * matrix );
+            dirty = true;
+        }
+
+        inline void pushAndPosMult(const AlternativeMatrix& matrix)
+        {
+            matrixStack.emplace( matrixStack.top() * Matrix(matrix) );
+            dirty = true;
+        }
+
+        inline void pushAndPreMult(const Matrix& matrix)
+        {
+            matrixStack.emplace( matrix * matrixStack.top() );
+            dirty = true;
+        }
+
+        inline void pushAndPreMult(const AlternativeMatrix& matrix)
+        {
+            matrixStack.emplace( Matrix(matrix) * matrixStack.top() );
+            dirty = true;
+        }
+
+        const Matrix& top() const { return matrixStack.top(); }
+
+        inline void pop()
+        {
+            matrixStack.pop();
+            dirty = true;
+        }
+
+        inline void dispatch(CommandBuffer& commandBuffer)
+        {
+            if (dirty)
+            {
+#if USE_DOUBLE_MATRIX_STACK
+                // make sure matrix is a float matrix.
+                mat4 newmatrix(matrixStack.top());
+                vkCmdPushConstants(commandBuffer, commandBuffer.getCurrentPipelineLayout(), stageFlags, offset, sizeof(newmatrix), newmatrix.data());
+#else
+                vkCmdPushConstants(commandBuffer, commandBuffer.getCurrentPipelineLayout(), stageFlags, offset, sizeof(Matrix), matrixStack.top().data());
+#endif
                 dirty = false;
             }
         }
@@ -65,27 +173,53 @@ namespace vsg
         State() :
             dirty(false) {}
 
+        using ComputePipelineStack = StateStack<BindComputePipeline>;
+        using GraphicsPipelineStack = StateStack<BindGraphicsPipeline>;
+        using DescriptorStacks = std::vector<StateStack<Command>>;
+        using VertexBuffersStack = StateStack<BindVertexBuffers>;
+        using IndexBufferStack = StateStack<BindIndexBuffer>;
         using PushConstantsMap = std::map<uint32_t, StateStack<PushConstants>>;
 
         bool dirty;
-        StateStack<BindPipeline> pipelineStack;
-        StateStack<BindDescriptorSets> descriptorStack;
-        StateStack<BindVertexBuffers> vertexBuffersStack;
-        StateStack<BindIndexBuffer> indexBufferStack;
+#if USE_COMPUTE_PIPELIE_STACK
+        ComputePipelineStack computePipelineStack;
+#endif
+
+        GraphicsPipelineStack graphicsPipelineStack;
+
+        DescriptorStacks descriptorStacks;
+
+        MatrixStack projectionMatrixStack{0};
+        MatrixStack viewMatrixStack{64};
+        MatrixStack modelMatrixStack{128};
+
+#if USE_PUSH_CONSTNANT_STACK
         PushConstantsMap pushConstantsMap;
+#endif
 
         inline void dispatch(CommandBuffer& commandBuffer)
         {
             if (dirty)
             {
-                pipelineStack.dispatch(commandBuffer);
-                descriptorStack.dispatch(commandBuffer);
-                vertexBuffersStack.dispatch(commandBuffer);
-                indexBufferStack.dispatch(commandBuffer);
+#if USE_COMPUTE_PIPELIE_STACK
+                computePipelineStack.dispatch(commandBuffer);
+#endif
+                graphicsPipelineStack.dispatch(commandBuffer);
+                for (auto& descriptorStack : descriptorStacks)
+                {
+                    descriptorStack.dispatch(commandBuffer);
+                }
+
+                projectionMatrixStack.dispatch(commandBuffer);
+                viewMatrixStack.dispatch(commandBuffer);
+                modelMatrixStack.dispatch(commandBuffer);
+
+#if USE_PUSH_CONSTNANT_STACK
                 for (auto& pushConstantsStack : pushConstantsMap)
                 {
                     pushConstantsStack.second.dispatch(commandBuffer);
                 }
+#endif
                 dirty = false;
             }
         }

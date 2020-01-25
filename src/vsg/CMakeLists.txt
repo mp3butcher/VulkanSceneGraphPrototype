@@ -12,28 +12,49 @@ set(SOURCES
 
     core/Allocator.cpp
     core/Auxiliary.cpp
+    core/ConstVisitor.cpp
+    core/Data.cpp
     core/Object.cpp
+    core/Objects.cpp
     core/Result.cpp
     core/Visitor.cpp
-    core/ConstVisitor.cpp
     core/Version.cpp
 
     introspection/c_interface.cpp
 
+    nodes/Commands.cpp
     nodes/Group.cpp
+    nodes/Geometry.cpp
     nodes/Node.cpp
     nodes/QuadGroup.cpp
     nodes/StateGroup.cpp
+    nodes/CullGroup.cpp
+    nodes/CullNode.cpp
+    nodes/MatrixTransform.cpp
+    nodes/VertexIndexDraw.cpp
 
-    utils/FileSystem.cpp
+
+    io/FileSystem.cpp
+    io/AsciiInput.cpp
+    io/AsciiOutput.cpp
+    io/BinaryInput.cpp
+    io/BinaryOutput.cpp
+    io/Input.cpp
+    io/Output.cpp
+    io/ObjectFactory.cpp
+    io/ReaderWriter.cpp
 
     traversals/DispatchTraversal.cpp
     traversals/CullTraversal.cpp
+    traversals/CompileTraversal.cpp
+    traversals/ComputeBounds.cpp
 
+    viewer/Camera.cpp
     viewer/GraphicsStage.cpp
-    viewer/GLFW_Window.cpp
+    viewer/View.cpp
     viewer/Viewer.cpp
     viewer/Window.cpp
+    viewer/Trackball.cpp
 
     vk/Buffer.cpp
     vk/BufferData.cpp
@@ -42,13 +63,15 @@ set(SOURCES
     vk/BindVertexBuffers.cpp
     vk/CommandBuffer.cpp
     vk/CommandPool.cpp
-    vk/CommandVisitor.cpp
     vk/ComputePipeline.cpp
+    vk/Descriptor.cpp
     vk/DescriptorPool.cpp
     vk/DescriptorSet.cpp
     vk/DescriptorSetLayout.cpp
     vk/Device.cpp
     vk/DeviceMemory.cpp
+    vk/Draw.cpp
+    vk/Extensions.cpp
     vk/Fence.cpp
     vk/Framebuffer.cpp
     vk/GraphicsPipeline.cpp
@@ -57,7 +80,6 @@ set(SOURCES
     vk/Instance.cpp
     vk/MemoryManager.cpp
     vk/PhysicalDevice.cpp
-    vk/Pipeline.cpp
     vk/PipelineLayout.cpp
     vk/PushConstants.cpp
     vk/RenderPass.cpp
@@ -67,6 +89,31 @@ set(SOURCES
     vk/Surface.cpp
     vk/Swapchain.cpp
 )
+
+# add platform specific Window implementation
+# set up library dependancies
+set(LIBRARIES PUBLIC Vulkan::Vulkan)
+
+if (ANDROID)
+    set(HEADERS ${HEADERS} ${CMAKE_SOURCE_DIR}/include/vsg/platform/android/Android_Window.h)
+    set(SOURCES ${SOURCES} platform/android/Android_Window.cpp)
+
+    if(CMAKE_SYSTEM_VERSION GREATER 24)
+        set(LIBRARIES ${LIBRARIES} PRIVATE ${AndroidLib} PRIVATE ${AndroidNativeWindowLib})
+    else()
+        set(LIBRARIES ${LIBRARIES} PRIVATE ${AndroidLib})
+    endif()
+
+elseif (WIN32)
+    set(SOURCES ${SOURCES} platform/win32/Win32_Window.cpp)
+elseif (APPLE)
+    set(SOURCES ${SOURCES} platform/macos/MacOS_Window.mm)
+    set(LIBRARIES ${LIBRARIES} PRIVATE ${COCOA_LIBRARY} PRIVATE ${QUARTZCORE_LIBRARY})
+else()
+    set(SOURCES ${SOURCES} platform/unix/Xcb_Window.cpp)
+    set(LIBRARIES ${LIBRARIES} PRIVATE PkgConfig::xcb)
+endif()
+
 
 add_library(vsg ${HEADERS} ${SOURCES})
 
@@ -90,21 +137,43 @@ if(MSVC)
     endmacro()
 
     SET_OUTPUT_DIR_PROPERTY(vsg "")
+
 endif()
 
+
+# place header and source files into group folders to help IDE's present the files in a logical manner
+function(ASSIGN_SOURCE_GROUPS GROUP_NAME ROOT_FOLDER)
+    foreach(FILE IN ITEMS ${ARGN})
+        if (IS_ABSOLUTE "${FILE}")
+            file(RELATIVE_PATH RELATIVE_SOURCE "${ROOT_FOLDER}" "${FILE}")
+        else()
+            set(RELATIVE_SOURCE "${FILE}")
+        endif()
+        get_filename_component(SOURCE_PATH "${RELATIVE_SOURCE}" PATH)
+        string(REPLACE "/" "\\" SOURCE_PATH_MSVC "${SOURCE_PATH}")
+        source_group("${GROUP_NAME}\\${SOURCE_PATH_MSVC}" FILES "${FILE}")
+    endforeach()
+endfunction(ASSIGN_SOURCE_GROUPS)
+
+# enable folders for MSVC
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+# group source files and headers
+ASSIGN_SOURCE_GROUPS("Source Files" "${CMAKE_CURRENT_SOURCE_DIR}" ${SOURCES})
+ASSIGN_SOURCE_GROUPS("Header Files" "${CMAKE_SOURCE_DIR}/include/vsg" ${HEADERS})
+
+
 # set up versions and position independent code that is required for unices
-set_property(TARGET vsg PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_property(TARGET vsg PROPERTY VERSION ${VSG_MAJOR_VERSION}.${VSG_MINOR_VERSION}.${VSG_PATCH_VERSION})
+set_property(TARGET vsg PROPERTY VERSION ${VSG_VERSION_MAJOR}.${VSG_VERSION_MINOR}.${VSG_VERSION_PATCH})
 set_property(TARGET vsg PROPERTY SOVERSION ${VSG_SOVERSION})
+set_property(TARGET vsg PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_property(TARGET vsg PROPERTY CXX_STANDARD 17)
 
-target_include_directories(vsg PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
+target_include_directories(vsg PUBLIC $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include> $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>)
 
-target_link_libraries(vsg Vulkan::Vulkan glfw)
+
+target_link_libraries(vsg ${LIBRARIES})
+
 
 install(TARGETS vsg EXPORT vsgTargets
         LIBRARY DESTINATION lib
@@ -130,16 +199,8 @@ install(EXPORT vsgTargets
 )
 
 include(CMakePackageConfigHelpers)
-write_basic_package_version_file("${CMAKE_BINARY_DIR}/src/vsg/vsgConfigVersion.cmake"
-    VERSION ${VSG_MAJOR_VERSION}.${VSG_MINOR_VERSION}.${VSG_PATCH_VERSION}
-    COMPATIBILITY SameMajorVersion
-)
+write_basic_package_version_file("${CMAKE_BINARY_DIR}/src/vsg/vsgConfigVersion.cmake" COMPATIBILITY SameMajorVersion)
 
-install(FILES "vsgConfig.cmake" "${CMAKE_BINARY_DIR}/src/vsg/vsgConfigVersion.cmake"
-    DESTINATION lib/cmake/vsg
-)
+install(FILES "vsgConfig.cmake" "${CMAKE_BINARY_DIR}/src/vsg/vsgConfigVersion.cmake" DESTINATION lib/cmake/vsg)
 
 # ]==]
-
-
-

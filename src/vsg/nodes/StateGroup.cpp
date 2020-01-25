@@ -12,12 +12,46 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/nodes/StateGroup.h>
 
+#include <vsg/io/Input.h>
+#include <vsg/io/Output.h>
+
 using namespace vsg;
 
-StateGroup::StateGroup()
+StateGroup::StateGroup(Allocator* allocator) :
+    Inherit(allocator)
 {
 }
 
 StateGroup::~StateGroup()
 {
+}
+
+void StateGroup::read(Input& input)
+{
+    Group::read(input);
+
+    _stateCommands.resize(input.readValue<uint32_t>("NumStateCommands"));
+    for (auto& command : _stateCommands)
+    {
+        command = input.readObject<StateCommand>("StateCommand");
+    }
+}
+
+void StateGroup::write(Output& output) const
+{
+    Group::write(output);
+
+    output.writeValue<uint32_t>("NumStateCommands", _stateCommands.size());
+    for (auto& command : _stateCommands)
+    {
+        output.writeObject("StateCommand", command.get());
+    }
+}
+
+void StateGroup::compile(Context& context)
+{
+    for (auto& stateCommand : _stateCommands)
+    {
+        stateCommand->compile(context);
+    }
 }

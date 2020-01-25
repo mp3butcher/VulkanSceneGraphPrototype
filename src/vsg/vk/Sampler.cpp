@@ -14,8 +14,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 using namespace vsg;
 
-Sampler::Sampler(VkSampler sampler, Device* device, AllocationCallbacks* allocator) :
+Sampler::Sampler(VkSampler sampler, const VkSamplerCreateInfo& info, Device* device, AllocationCallbacks* allocator) :
     _sampler(sampler),
+    _info(info),
     _device(device),
     _allocator(allocator)
 {
@@ -40,7 +41,7 @@ Sampler::Result Sampler::create(Device* device, const VkSamplerCreateInfo& creat
     VkResult result = vkCreateSampler(*device, &createSamplerInfo, allocator, &sampler);
     if (result == VK_SUCCESS)
     {
-        return Result(new Sampler(sampler, device, allocator));
+        return Result(new Sampler(sampler, createSamplerInfo, device, allocator));
     }
     else
     {
@@ -54,6 +55,7 @@ Sampler::Result Sampler::create(Device* device, AllocationCallbacks* allocator)
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     samplerInfo.minFilter = VK_FILTER_LINEAR;
     samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -68,7 +70,6 @@ Sampler::Result Sampler::create(Device* device, AllocationCallbacks* allocator)
     samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
     samplerInfo.unnormalizedCoordinates = VK_FALSE;
     samplerInfo.compareEnable = VK_FALSE;
-    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 
     return create(device, samplerInfo, allocator);
 }

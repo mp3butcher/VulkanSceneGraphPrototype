@@ -63,16 +63,17 @@ bool Device::vkCreate() {
         }
     }
 
-    _deviceCreateInfo.queueCreateInfoCount = _queueCreateInfos.size();
+    _deviceCreateInfo.queueCreateInfoCount =  static_cast<uint32_t>(queueCreateInfos.size());
     _deviceCreateInfo.pQueueCreateInfos = _queueCreateInfos.empty() ? nullptr : _queueCreateInfos.data();
 
     _deviceCreateInfo.pEnabledFeatures = &_deviceFeatures;
 
-    _deviceCreateInfo.enabledExtensionCount = _deviceExtensions.size();
+    _deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
     _deviceCreateInfo.ppEnabledExtensionNames = _deviceExtensions.empty() ? nullptr : _deviceExtensions.data();
 
-    _deviceCreateInfo.enabledLayerCount = _layers.size();
+    _deviceCreateInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
     _deviceCreateInfo.ppEnabledLayerNames = _layers.empty() ? nullptr : _layers.data();
+
 
     VkResult result = vkCreateDevice(*_physicalDevice, &_deviceCreateInfo, _allocator, &_device);
     if (result != VK_SUCCESS) return false;
@@ -81,6 +82,7 @@ bool Device::vkCreate() {
     //they will be destroy at vkDestroyDevice call in Device destructor
 
     return true;
+
 
 }
 

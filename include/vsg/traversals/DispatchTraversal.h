@@ -14,6 +14,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <memory>
 #include <vsg/core/Object.h>
+#include <vsg/maths/mat4.h>
 
 namespace vsg
 {
@@ -24,7 +25,11 @@ namespace vsg
     class QuadGroup;
     class LOD;
     class StateGroup;
+    class CullGroup;
+    class CullNode;
+    class MatrixTransform;
     class Command;
+    class Commands;
     class CommandBuffer;
 
     class VSG_DECLSPEC DispatchTraversal : public Object
@@ -33,19 +38,26 @@ namespace vsg
         explicit DispatchTraversal(CommandBuffer* commandBuffer = nullptr);
         ~DispatchTraversal();
 
+        void setProjectionMatrix(const dmat4& projMatrix);
+        void setViewMatrix(const dmat4& viewMatrix);
+
         void apply(const Object& object);
 
         // scene graph nodes
-        void apply(const Group& object);
-        void apply(const QuadGroup& object);
-        void apply(const LOD& object);
+        void apply(const Group& group);
+        void apply(const QuadGroup& quadGrouo);
+        void apply(const LOD& load);
+        void apply(const CullGroup& cullGroup);
+        void apply(const CullNode& cullNode);
 
         // Vulkan nodes
+        void apply(const MatrixTransform& mt);
         void apply(const StateGroup& object);
+        void apply(const Commands& commands);
         void apply(const Command& command);
 
     protected:
-        class Data;
-        Data* _data;
+        class InternalData;
+        InternalData* _data;
     };
 } // namespace vsg

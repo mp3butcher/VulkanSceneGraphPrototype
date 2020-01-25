@@ -118,6 +118,7 @@ bool RenderPass::vkCreate()
 
     VkRenderPassCreateInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+
     renderPassInfo.attachmentCount = _attachments.size();
     renderPassInfo.pAttachments = _attachments.data();
     renderPassInfo.subpassCount = subpasses.size();
@@ -127,6 +128,7 @@ bool RenderPass::vkCreate()
 
     VkResult result = vkCreateRenderPass(*_device, &renderPassInfo, _allocator, &_renderPass);
 VSG_CHECK_RESULT(result);
+
     if (result == VK_SUCCESS)
     {
         return true;//Result(new RenderPass(renderPass, device, allocator));

@@ -16,13 +16,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <cstring>
 
+#include <iostream>
+
 using namespace vsg;
 
-DeviceMemory::DeviceMemory(VkDeviceMemory deviceMemory, Device* device, AllocationCallbacks* allocator) :
+DeviceMemory::DeviceMemory(VkDeviceMemory deviceMemory, const VkMemoryRequirements& memRequirements, Device* device, AllocationCallbacks* allocator) :
     _deviceMemory(deviceMemory),
+    _memoryRequirements(memRequirements),
     _device(device),
     _allocator(allocator)
 {
+    _availableMemory.insert(MemorySlot(memRequirements.size, 0));
 }
 
 DeviceMemory::~DeviceMemory()
@@ -56,6 +60,21 @@ DeviceMemory::Result DeviceMemory::create(Device* device, const VkMemoryRequirem
     }
     uint32_t memoryTypeIndex = i;
 
+#if 0
+    if (properties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+    {
+        static VkDeviceSize s_TotalDeviceMemoryAllocated = 0;
+        s_TotalDeviceMemoryAllocated += memRequirements.size;
+        std::cout<<"Device Local DeviceMemory::DeviceMemory() "<<memRequirements.size<<", "<<memRequirements.alignment<<", "<<memRequirements.memoryTypeBits<<",  s_TotalMemoryAllocated = "<<s_TotalDeviceMemoryAllocated<<std::endl;
+    }
+    else
+    {
+        static VkDeviceSize s_TotalHostMemoryAllocated = 0;
+        s_TotalHostMemoryAllocated += memRequirements.size;
+        std::cout<<"Staging DeviceMemory::DeviceMemory() "<<memRequirements.size<<", "<<memRequirements.alignment<<", "<<memRequirements.memoryTypeBits<<",  s_TotalMemoryAllocated = "<<s_TotalHostMemoryAllocated<<std::endl;
+    }
+#endif
+
     VkMemoryAllocateInfo allocateInfo = {};
     allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocateInfo.allocationSize = memRequirements.size;
@@ -65,7 +84,7 @@ DeviceMemory::Result DeviceMemory::create(Device* device, const VkMemoryRequirem
     VkResult result = vkAllocateMemory(*device, &allocateInfo, allocator, &deviceMemory);
     if (result == VK_SUCCESS)
     {
-        return Result(new DeviceMemory(deviceMemory, device, allocator));
+        return Result(new DeviceMemory(deviceMemory, memRequirements, device, allocator));
     }
     else
     {
@@ -99,7 +118,7 @@ void DeviceMemory::unmap()
     vkUnmapMemory(*_device, _deviceMemory);
 }
 
-void DeviceMemory::copy(VkDeviceSize offset, VkDeviceSize size, void* src_data)
+void DeviceMemory::copy(VkDeviceSize offset, VkDeviceSize size, const void* src_data)
 {
     // should we have checks against buffer having enough memory for copied data?
 
@@ -111,7 +130,39 @@ void DeviceMemory::copy(VkDeviceSize offset, VkDeviceSize size, void* src_data)
     unmap();
 }
 
-void DeviceMemory::copy(VkDeviceSize offset, Data* data)
+void DeviceMemory::copy(VkDeviceSize offset, const Data* data)
 {
     copy(offset, data->dataSize(), data->dataPointer());
+}
+
+DeviceMemory::OptionalMemoryOffset DeviceMemory::reserve(VkDeviceSize size)
+{
+    if (full()) return OptionalMemoryOffset(false, 0);
+
+    auto itr = _availableMemory.lower_bound(size);
+    if (itr != _availableMemory.end())
+    {
+
+        MemorySlot slot(*itr);
+        _availableMemory.erase(itr);
+
+        VkDeviceSize alignedEnd = ((size + _memoryRequirements.alignment - 1) / _memoryRequirements.alignment) * _memoryRequirements.alignment;
+        //std::cout<<"size = "<<size<<", alignedEnd = "<<alignedEnd<<std::endl;
+
+        if (alignedEnd < slot.first)
+        {
+            MemorySlot slotUnused(slot.first - alignedEnd, slot.second + alignedEnd);
+            _availableMemory.insert(slotUnused);
+            //std::cout<<"   slot unused "<<slotUnused.first<<", "<<slotUnused.second<<std::endl;
+        }
+        else
+        {
+            //std::cout<<"   slot completely used "<<_availableMemory.size()<<std::endl;
+        }
+        return OptionalMemoryOffset(true, slot.second);
+    }
+    else
+    {
+        return OptionalMemoryOffset(false, 0);
+    }
 }

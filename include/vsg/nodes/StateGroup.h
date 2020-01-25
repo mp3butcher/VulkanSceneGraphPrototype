@@ -13,6 +13,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/nodes/Group.h>
+#include <vsg/vk/Command.h>
+#include <vsg/vk/Descriptor.h>
+#include <vsg/vk/DescriptorSet.h>
+
+#include <vsg/traversals/CompileTraversal.h>
 
 namespace vsg
 {
@@ -20,51 +25,46 @@ namespace vsg
     class State;
     class CommandBuffer;
 
-    class StateComponent : public Inherit<Object, StateComponent>
-    {
-    public:
-        StateComponent() {}
-
-        virtual void pushTo(State& state) const = 0;
-        virtual void popFrom(State& state) const = 0;
-
-        virtual void dispatch(CommandBuffer& commandBuffer) const = 0;
-
-    protected:
-        virtual ~StateComponent() {}
-    };
-
     class VSG_DECLSPEC StateGroup : public Inherit<Group, StateGroup>
     {
     public:
-        StateGroup();
+        StateGroup(Allocator* allocator = nullptr);
 
-        using StateComponents = std::vector<ref_ptr<StateComponent>>;
+        void read(Input& input) override;
+        void write(Output& output) const override;
 
-#if 1
-        void add(ref_ptr<StateComponent> component)
+        using StateCommands = std::vector<ref_ptr<StateCommand>>;
+
+        StateCommands& getStateCommands() { return _stateCommands; }
+        const StateCommands& getStateCommands() const { return _stateCommands; }
+
+        void add(ref_ptr<StateCommand> stateCommand)
         {
-            _stateComponents.push_back(component);
+            _stateCommands.push_back(stateCommand);
         }
-#else
-        void add(StateComponent* component)
-        {
-            _stateComponents.push_back(component);
-        }
-#endif
 
         inline void pushTo(State& state) const
         {
-            for (auto& component : _stateComponents) component->pushTo(state);
+            for (auto& stateCommand : _stateCommands)
+            {
+                stateCommand->pushTo(state);
+            }
         }
         inline void popFrom(State& state) const
         {
-            for (auto& component : _stateComponents) component->popFrom(state);
+            for (auto& stateCommand : _stateCommands)
+            {
+                stateCommand->popFrom(state);
+            }
         }
+
+        virtual void compile(Context& context);
 
     protected:
         virtual ~StateGroup();
 
-        StateComponents _stateComponents;
+        StateCommands _stateCommands;
     };
+    VSG_type_name(vsg::StateGroup);
+
 } // namespace vsg

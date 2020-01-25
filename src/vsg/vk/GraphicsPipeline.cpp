@@ -11,13 +11,22 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/vk/GraphicsPipeline.h>
+#include <vsg/vk/State.h>
 
 using namespace vsg;
 
-GraphicsPipeline::GraphicsPipeline(VkPipeline pipeline, Device* device, RenderPass* renderPass, PipelineLayout* pipelineLayout, const GraphicsPipelineStates& pipelineStates, AllocationCallbacks* allocator) :
-    Inherit(pipeline, VK_PIPELINE_BIND_POINT_GRAPHICS, device, pipelineLayout, allocator),
-    _renderPass(renderPass),
-    _pipelineStates(pipelineStates)
+////////////////////////////////////////////////////////////////////////
+//
+// GraphicsPipeline
+//
+GraphicsPipeline::GraphicsPipeline()
+{
+}
+
+GraphicsPipeline::GraphicsPipeline(PipelineLayout* pipelineLayout, const GraphicsPipelineStates& pipelineStates, AllocationCallbacks* allocator) :
+    _pipelineLayout(pipelineLayout),
+    _pipelineStates(pipelineStates),
+    _allocator(allocator)
 {
 }
 
@@ -25,11 +34,69 @@ GraphicsPipeline::~GraphicsPipeline()
 {
 }
 
-GraphicsPipeline::Result GraphicsPipeline::create(Device* device, RenderPass* renderPass, PipelineLayout* pipelineLayout, const GraphicsPipelineStates& pipelineStates, AllocationCallbacks* allocator)
+void GraphicsPipeline::read(Input& input)
+{
+    Object::read(input);
+
+    _pipelineLayout = input.readObject<PipelineLayout>("PipelineLayout");
+
+    _pipelineStates.resize(input.readValue<uint32_t>("NumPipelineStates"));
+    for (auto& pipelineState : _pipelineStates)
+    {
+        pipelineState = input.readObject<GraphicsPipelineState>("PipelineState");
+    }
+}
+
+void GraphicsPipeline::write(Output& output) const
+{
+    Object::write(output);
+
+    output.writeObject("PipelineLayout", _pipelineLayout.get());
+
+    output.writeValue<uint32_t>("NumPipelineStates", _pipelineStates.size());
+    for (auto& pipelineState : _pipelineStates)
+    {
+        output.writeObject("PipelineState", pipelineState.get());
+    }
+}
+
+void GraphicsPipeline::compile(Context& context)
+{
+    if (!_implementation)
+    {
+        _pipelineLayout->compile(context);
+
+        for (auto& pipelineState : _pipelineStates)
+        {
+            pipelineState->compile(context);
+        }
+
+        GraphicsPipelineStates full_pipelineStates = _pipelineStates;
+        full_pipelineStates.emplace_back(context.viewport);
+
+        _implementation = GraphicsPipeline::Implementation::create(context.device, context.renderPass, _pipelineLayout, full_pipelineStates, _allocator);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////
+//
+// GraphicsPipeline::Implementation
+//
+GraphicsPipeline::Implementation::Implementation(VkPipeline pipeline, Device* device, RenderPass* renderPass, PipelineLayout* pipelineLayout, const GraphicsPipelineStates& pipelineStates, AllocationCallbacks* allocator) :
+    _pipeline(pipeline),
+    _device(device),
+    _renderPass(renderPass),
+    _pipelineLayout(pipelineLayout),
+    _pipelineStates(pipelineStates),
+    _allocator(allocator)
+{
+}
+
+GraphicsPipeline::Implementation::Result GraphicsPipeline::Implementation::create(Device* device, RenderPass* renderPass, PipelineLayout* pipelineLayout, const GraphicsPipelineStates& pipelineStates, AllocationCallbacks* allocator)
 {
     if (!device || !renderPass || !pipelineLayout)
     {
-        return GraphicsPipeline::Result("Error: vsg::GraphicsPipeline::create(...) failed to create graphics pipeline, inputs not defined.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
+        return Result("Error: vsg::GraphicsPipeline::create(...) failed to create graphics pipeline, inputs not defined.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
     }
 
     VkGraphicsPipelineCreateInfo pipelineInfo = {};
@@ -48,18 +115,82 @@ GraphicsPipeline::Result GraphicsPipeline::create(Device* device, RenderPass* re
     VkResult result = vkCreateGraphicsPipelines(*device, VK_NULL_HANDLE, 1, &pipelineInfo, allocator, &pipeline);
     if (result == VK_SUCCESS)
     {
-        return Result(new GraphicsPipeline(pipeline, device, renderPass, pipelineLayout, pipelineStates, allocator));
+        return Result(new Implementation(pipeline, device, renderPass, pipelineLayout, pipelineStates, allocator));
     }
     else
     {
-        return GraphicsPipeline::Result("Error: vsg::Pipeline::createGraphics(...) failed to create VkPipeline.", result);
+        return Result("Error: vsg::Pipeline::createGraphics(...) failed to create VkPipeline.", result);
     }
+}
+
+GraphicsPipeline::Implementation::~Implementation()
+{
+    vkDestroyPipeline(*_device, _pipeline, _allocator);
+}
+
+////////////////////////////////////////////////////////////////////////
+//
+// BindGraphicsPipeline
+//
+BindGraphicsPipeline::BindGraphicsPipeline(GraphicsPipeline* pipeline) :
+    _pipeline(pipeline)
+{
+}
+
+BindGraphicsPipeline::~BindGraphicsPipeline()
+{
+}
+
+void BindGraphicsPipeline::read(Input& input)
+{
+    StateCommand::read(input);
+
+    _pipeline = input.readObject<GraphicsPipeline>("GraphicsPipeline");
+}
+
+void BindGraphicsPipeline::write(Output& output) const
+{
+    StateCommand::write(output);
+
+    output.writeObject("GraphicsPipeline", _pipeline.get());
+}
+
+void BindGraphicsPipeline::pushTo(State& state) const
+{
+    state.dirty = true;
+    state.graphicsPipelineStack.push(this);
+}
+
+void BindGraphicsPipeline::popFrom(State& state) const
+{
+    state.dirty = true;
+    state.graphicsPipelineStack.pop();
+}
+
+void BindGraphicsPipeline::dispatch(CommandBuffer& commandBuffer) const
+{
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, *_pipeline);
+    commandBuffer.setCurrentPipelineLayout(*(_pipeline->getPipelineLayout()));
+}
+
+void BindGraphicsPipeline::compile(Context& context)
+{
+    if (_pipeline) _pipeline->compile(context);
+}
+
+void BindGraphicsPipeline::release()
+{
+    if (_pipeline) _pipeline->release();
 }
 
 ////////////////////////////////////////////////////////////////////////
 //
 // ShaderStages
 //
+ShaderStages::ShaderStages()
+{
+}
+
 ShaderStages::ShaderStages(const ShaderModules& shaderModules)
 {
     setShaderModules(shaderModules);
@@ -69,24 +200,57 @@ ShaderStages::~ShaderStages()
 {
 }
 
+void ShaderStages::read(Input& input)
+{
+    Object::read(input);
+
+    _shaderModules.resize(input.readValue<uint32_t>("NumShaderModule"));
+    for (auto& shaderModule : _shaderModules)
+    {
+        shaderModule = input.readObject<ShaderModule>("ShaderModule");
+    }
+}
+
+void ShaderStages::write(Output& output) const
+{
+    Object::write(output);
+
+    output.writeValue<uint32_t>("NumShaderModule", _shaderModules.size());
+    for (auto& shaderModule : _shaderModules)
+    {
+        output.writeObject("ShaderModule", shaderModule.get());
+    }
+}
+
 void ShaderStages::apply(VkGraphicsPipelineCreateInfo& pipelineInfo) const
 {
-    pipelineInfo.stageCount = size();
+    pipelineInfo.stageCount = static_cast<uint32_t>(size());
     pipelineInfo.pStages = data();
 }
 
-void ShaderStages::update()
+void ShaderStages::compile(Context& context)
 {
     _stages.resize(_shaderModules.size());
     for (size_t i = 0; i < _shaderModules.size(); ++i)
     {
         VkPipelineShaderStageCreateInfo& stageInfo = (_stages)[i];
         ShaderModule* sm = _shaderModules[i];
+        sm->compile(context);
         stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stageInfo.stage = sm->getShader()->stage();
+        stageInfo.stage = sm->stage();
         stageInfo.module = *sm;
-        stageInfo.pName = sm->getShader()->entryPointName().c_str();
+        stageInfo.pName = sm->entryPointName().c_str();
     }
+}
+
+void ShaderStages::release()
+{
+    for (auto& shaderModules : _shaderModules)
+    {
+        shaderModules->release();
+    }
+
+    _stages.clear();
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -107,14 +271,65 @@ VertexInputState::VertexInputState(const Bindings& bindings, const Attributes& a
     _attributes(attributes)
 {
     sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexBindingDescriptionCount = _bindings.size();
-    pVertexBindingDescriptions = _bindings.data();
-    vertexAttributeDescriptionCount = _attributes.size();
-    pVertexAttributeDescriptions = _attributes.data();
+    _assign();
 }
 
 VertexInputState::~VertexInputState()
 {
+}
+
+void VertexInputState::_assign()
+{
+    vertexBindingDescriptionCount = static_cast<uint32_t>(_bindings.size());
+    pVertexBindingDescriptions = _bindings.data();
+    vertexAttributeDescriptionCount = static_cast<uint32_t>(_attributes.size());
+    pVertexAttributeDescriptions = _attributes.data();
+}
+
+void VertexInputState::read(Input& input)
+{
+    Object::read(input);
+
+    _bindings.resize(input.readValue<uint32_t>("NumBindings"));
+    for (auto& binding : _bindings)
+    {
+        input.read("binding", binding.binding);
+        input.read("stride", binding.stride);
+        binding.inputRate = static_cast<VkVertexInputRate>(input.readValue<uint32_t>("inputRate"));
+    }
+
+    _attributes.resize(input.readValue<uint32_t>("NumAttributes"));
+    for (auto& attribute : _attributes)
+    {
+        input.read("location", attribute.location);
+        input.read("binding", attribute.binding);
+        attribute.format = static_cast<VkFormat>(input.readValue<uint32_t>("format"));
+        input.read("offset", attribute.offset);
+    }
+
+    _assign();
+}
+
+void VertexInputState::write(Output& output) const
+{
+    Object::write(output);
+
+    output.writeValue<uint32_t>("NumBindings", _bindings.size());
+    for (auto& binding : _bindings)
+    {
+        output.write("binding", binding.binding);
+        output.write("stride", binding.stride);
+        output.writeValue<uint32_t>("inputRate", binding.inputRate);
+    }
+
+    output.writeValue<uint32_t>("NumAttributes", _attributes.size());
+    for (auto& attribute : _attributes)
+    {
+        output.write("location", attribute.location);
+        output.write("binding", attribute.binding);
+        output.writeValue<uint32_t>("format", attribute.format);
+        output.write("offset", attribute.offset);
+    }
 }
 
 void VertexInputState::apply(VkGraphicsPipelineCreateInfo& pipelineInfo) const
@@ -134,8 +349,32 @@ InputAssemblyState::InputAssemblyState() :
     primitiveRestartEnable = VK_FALSE;
 }
 
+InputAssemblyState::InputAssemblyState(VkPrimitiveTopology primitiveTopology, bool enablePrimitiveRestart) :
+    VkPipelineInputAssemblyStateCreateInfo{}
+{
+    sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    topology = primitiveTopology;
+    primitiveRestartEnable = enablePrimitiveRestart ? VK_TRUE : VK_FALSE;
+}
+
 InputAssemblyState::~InputAssemblyState()
 {
+}
+
+void InputAssemblyState::read(Input& input)
+{
+    Object::read(input);
+
+    topology = static_cast<VkPrimitiveTopology>(input.readValue<uint32_t>("topology"));
+    primitiveRestartEnable = static_cast<VkBool32>(input.readValue<uint32_t>("primitiveRestartEnable"));
+}
+
+void InputAssemblyState::write(Output& output) const
+{
+    Object::write(output);
+
+    output.writeValue<uint32_t>("topology", topology);
+    output.writeValue<uint32_t>("primitiveRestartEnable", primitiveRestartEnable);
 }
 
 void InputAssemblyState::apply(VkGraphicsPipelineCreateInfo& pipelineInfo) const
@@ -147,6 +386,13 @@ void InputAssemblyState::apply(VkGraphicsPipelineCreateInfo& pipelineInfo) const
 //
 // ViewportState
 //
+ViewportState::ViewportState() :
+    VkPipelineViewportStateCreateInfo{},
+    _viewport{},
+    _scissor{}
+{
+}
+
 ViewportState::ViewportState(const VkExtent2D& extent) :
     VkPipelineViewportStateCreateInfo{},
     _viewport{},
@@ -157,6 +403,8 @@ ViewportState::ViewportState(const VkExtent2D& extent) :
     _viewport.y = 0.0f;
     _viewport.width = static_cast<float>(extent.width);
     _viewport.height = static_cast<float>(extent.height);
+    _viewport.minDepth = 0.0f;
+    _viewport.maxDepth = 1.0f;
 
     _scissor.offset = {0, 0};
     _scissor.extent = extent;
@@ -242,6 +490,28 @@ DepthStencilState::~DepthStencilState()
 {
 }
 
+void DepthStencilState::read(Input& input)
+{
+    Object::read(input);
+
+    depthTestEnable = static_cast<VkBool32>(input.readValue<uint32_t>("depthTestEnable"));
+    depthWriteEnable = static_cast<VkBool32>(input.readValue<uint32_t>("depthWriteEnable"));
+    depthCompareOp = static_cast<VkCompareOp>(input.readValue<uint32_t>("depthCompareOp"));
+    depthBoundsTestEnable = static_cast<VkBool32>(input.readValue<uint32_t>("depthBoundsTestEnable"));
+    stencilTestEnable = static_cast<VkBool32>(input.readValue<uint32_t>("stencilTestEnable"));
+}
+
+void DepthStencilState::write(Output& output) const
+{
+    Object::write(output);
+
+    output.writeValue<uint32_t>("depthTestEnable", depthTestEnable);
+    output.writeValue<uint32_t>("depthWriteEnable", depthWriteEnable);
+    output.writeValue<uint32_t>("depthCompareOp", depthCompareOp);
+    output.writeValue<uint32_t>("depthBoundsTestEnable", depthBoundsTestEnable);
+    output.writeValue<uint32_t>("stencilTestEnable", stencilTestEnable);
+}
+
 void DepthStencilState::apply(VkGraphicsPipelineCreateInfo& pipelineInfo) const
 {
     pipelineInfo.pDepthStencilState = this;
@@ -267,7 +537,7 @@ ColorBlendState::ColorBlendState() :
 
     logicOpEnable = VK_FALSE;
     logicOp = VK_LOGIC_OP_COPY;
-    attachmentCount = _colorBlendAttachments.size();
+    attachmentCount = static_cast<uint32_t>(_colorBlendAttachments.size());
     pAttachments = _colorBlendAttachments.data();
     blendConstants[0] = 0.0f;
     blendConstants[1] = 0.0f;
@@ -275,8 +545,68 @@ ColorBlendState::ColorBlendState() :
     blendConstants[3] = 0.0f;
 }
 
+ColorBlendState::ColorBlendState(const ColorBlendAttachments& colorBlendAttachments) :
+    ColorBlendState()
+{
+    setColorBlendAttachments(colorBlendAttachments);
+}
+
 ColorBlendState::~ColorBlendState()
 {
+}
+
+void ColorBlendState::read(Input& input)
+{
+    Object::read(input);
+
+    logicOp = static_cast<VkLogicOp>(input.readValue<uint32_t>("logicOp"));
+    logicOpEnable = static_cast<VkBool32>(input.readValue<uint32_t>("logicOpEnable"));
+
+    _colorBlendAttachments.resize(input.readValue<uint32_t>("NumColorBlendAttachments"));
+    for (auto& colorBlendAttachment : _colorBlendAttachments)
+    {
+        colorBlendAttachment.blendEnable = static_cast<VkBool32>(input.readValue<uint32_t>("blendEnable"));
+        colorBlendAttachment.srcColorBlendFactor = static_cast<VkBlendFactor>(input.readValue<uint32_t>("srcColorBlendFactor"));
+        colorBlendAttachment.dstColorBlendFactor = static_cast<VkBlendFactor>(input.readValue<uint32_t>("dstColorBlendFactor"));
+        colorBlendAttachment.colorBlendOp = static_cast<VkBlendOp>(input.readValue<uint32_t>("colorBlendOp"));
+        colorBlendAttachment.srcAlphaBlendFactor = static_cast<VkBlendFactor>(input.readValue<uint32_t>("srcAlphaBlendFactor"));
+        colorBlendAttachment.dstAlphaBlendFactor = static_cast<VkBlendFactor>(input.readValue<uint32_t>("dstAlphaBlendFactor"));
+        colorBlendAttachment.alphaBlendOp = static_cast<VkBlendOp>(input.readValue<uint32_t>("alphaBlendOp"));
+        colorBlendAttachment.colorWriteMask = static_cast<VkColorComponentFlags>(input.readValue<uint32_t>("colorWriteMask"));
+    }
+
+    input.read("blendConstants0", blendConstants[0]);
+    input.read("blendConstants1", blendConstants[1]);
+    input.read("blendConstants2", blendConstants[2]);
+    input.read("blendConstants3", blendConstants[3]);
+
+    update();
+}
+
+void ColorBlendState::write(Output& output) const
+{
+    Object::write(output);
+
+    output.writeValue<uint32_t>("logicOp", logicOp);
+    output.writeValue<uint32_t>("logicOpEnable", logicOpEnable);
+
+    output.writeValue<uint32_t>("NumColorBlendAttachments", _colorBlendAttachments.size());
+    for (auto& colorBlendAttachment : _colorBlendAttachments)
+    {
+        output.writeValue<uint32_t>("blendEnable", colorBlendAttachment.blendEnable);
+        output.writeValue<uint32_t>("srcColorBlendFactor", colorBlendAttachment.srcColorBlendFactor);
+        output.writeValue<uint32_t>("dstColorBlendFactor", colorBlendAttachment.dstColorBlendFactor);
+        output.writeValue<uint32_t>("colorBlendOp", colorBlendAttachment.colorBlendOp);
+        output.writeValue<uint32_t>("srcAlphaBlendFactor", colorBlendAttachment.srcAlphaBlendFactor);
+        output.writeValue<uint32_t>("dstAlphaBlendFactor", colorBlendAttachment.dstAlphaBlendFactor);
+        output.writeValue<uint32_t>("alphaBlendOp", colorBlendAttachment.alphaBlendOp);
+        output.writeValue<uint32_t>("colorWriteMask", colorBlendAttachment.colorWriteMask);
+    }
+
+    output.write("blendConstants0", blendConstants[0]);
+    output.write("blendConstants1", blendConstants[1]);
+    output.write("blendConstants2", blendConstants[2]);
+    output.write("blendConstants3", blendConstants[3]);
 }
 
 void ColorBlendState::apply(VkGraphicsPipelineCreateInfo& pipelineInfo) const
@@ -286,6 +616,6 @@ void ColorBlendState::apply(VkGraphicsPipelineCreateInfo& pipelineInfo) const
 
 void ColorBlendState::update()
 {
-    attachmentCount = _colorBlendAttachments.size();
+    attachmentCount = static_cast<uint32_t>(_colorBlendAttachments.size());
     pAttachments = _colorBlendAttachments.data();
 }

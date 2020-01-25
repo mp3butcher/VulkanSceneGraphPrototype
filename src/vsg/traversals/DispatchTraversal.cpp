@@ -12,8 +12,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/traversals/DispatchTraversal.h>
 
+#include <vsg/nodes/Commands.h>
+#include <vsg/nodes/CullGroup.h>
+#include <vsg/nodes/CullNode.h>
 #include <vsg/nodes/Group.h>
 #include <vsg/nodes/LOD.h>
+#include <vsg/nodes/MatrixTransform.h>
 #include <vsg/nodes/QuadGroup.h>
 #include <vsg/nodes/StateGroup.h>
 
@@ -22,37 +26,101 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/vk/RenderPass.h>
 #include <vsg/vk/State.h>
 
+#include <vsg/maths/plane.h>
+
 #include <iostream>
 
 using namespace vsg;
 
-#define INLINE_TRAVERSE
+#define USE_TRANSFORM_ACCUMULATION 1
+#define INLINE_TRAVERSE 1
+#define USE_FRUSTUM_ARRAY 1
 
-struct DispatchTraversal::Data
+class DispatchTraversal::InternalData
 {
-    explicit Data(CommandBuffer* commandBuffer) :
-        _commandBuffer(commandBuffer)
-    {
-        std::cout << "DispatchTraversal::Data::Data(" << commandBuffer << ")" << std::endl;
-    }
-
-    ~Data()
-    {
-        std::cout << "DispatchTraversal::Data::~Data()" << std::endl;
-    }
-
+public:
     State _state;
     ref_ptr<CommandBuffer> _commandBuffer;
+
+    using value_type = MatrixStack::value_type;
+    using Plane = t_plane<value_type>;
+
+#if USE_FRUSTUM_ARRAY
+    using Polytope = std::array<Plane, 4>;
+#else
+    using Polytope = std::vector<Plane>;
+#endif
+
+    Polytope _frustumUnit;
+
+    bool _frustumDirty;
+    Polytope _frustum;
+
+    explicit InternalData(CommandBuffer* commandBuffer) :
+        _commandBuffer(commandBuffer)
+    {
+        //        std::cout << "DispatchTraversal::InternalData::InternalData(" << commandBuffer << ")" << std::endl;
+        _frustumUnit = Polytope{{
+            Plane(1.0, 0.0, 0.0, 1.0),  // left plane
+            Plane(-1.0, 0.0, 0.0, 1.0), // right plane
+            Plane(0.0, 1.0, 0.0, 1.0),  // bottom plane
+            Plane(0.0, -1.0, 0.0, 1.0)  // top plane
+        }};
+
+        // std::cout<<"Plane::value_type  = "<<type_name<value_type>() <<std::endl;
+
+        _frustumDirty = true;
+    }
+
+    ~InternalData()
+    {
+        //        std::cout << "DispatchTraversal::InternalData::~InternalData()" << std::endl;
+    }
+
+    template<typename T>
+    constexpr bool intersect(t_sphere<T> const& s)
+    {
+        if (_frustumDirty)
+        {
+            auto pmv = _state.projectionMatrixStack.top() * _state.viewMatrixStack.top() * _state.modelMatrixStack.top();
+
+#if USE_FRUSTUM_ARRAY
+            _frustum[0] = _frustumUnit[0] * pmv;
+            _frustum[1] = _frustumUnit[1] * pmv;
+            _frustum[2] = _frustumUnit[2] * pmv;
+            _frustum[3] = _frustumUnit[3] * pmv;
+#else
+            _frustum.clear();
+            for (auto& pl : _frustumUnit)
+            {
+                _frustum.push_back(pl * pmv);
+            }
+#endif
+            _frustumDirty = false;
+        }
+
+        return vsg::intersect(_frustum, s);
+    }
 };
 
 DispatchTraversal::DispatchTraversal(CommandBuffer* commandBuffer) :
-    _data(new Data(commandBuffer))
+    _data(new InternalData(commandBuffer))
 {
 }
 
 DispatchTraversal::~DispatchTraversal()
 {
     delete _data;
+}
+
+void DispatchTraversal::setProjectionMatrix(const dmat4& projMatrix)
+{
+    _data->_state.projectionMatrixStack.set(projMatrix);
+}
+
+void DispatchTraversal::setViewMatrix(const dmat4& viewMatrix)
+{
+    _data->_state.viewMatrixStack.set(viewMatrix);
 }
 
 void DispatchTraversal::apply(const Object& object)
@@ -64,7 +132,7 @@ void DispatchTraversal::apply(const Object& object)
 void DispatchTraversal::apply(const Group& group)
 {
 //    std::cout<<"Visiting Group "<<std::endl;
-#ifdef INLINE_TRAVERSE
+#if INLINE_TRAVERSE
     vsg::Group::t_traverse(group, *this);
 #else
     group.traverse(*this);
@@ -74,7 +142,7 @@ void DispatchTraversal::apply(const Group& group)
 void DispatchTraversal::apply(const QuadGroup& group)
 {
 //    std::cout<<"Visiting QuadGroup "<<std::endl;
-#ifdef INLINE_TRAVERSE
+#if INLINE_TRAVERSE
     vsg::QuadGroup::t_traverse(group, *this);
 #else
     group.traverse(*this);
@@ -87,6 +155,42 @@ void DispatchTraversal::apply(const LOD& object)
     object.traverse(*this);
 }
 
+void DispatchTraversal::apply(const CullGroup& cullGroup)
+{
+#if 0
+    // no culling
+    cullGroup.traverse(*this);
+#else
+    if (_data->intersect(cullGroup.getBound()))
+    {
+        //std::cout<<"Passed node"<<std::endl;
+        cullGroup.traverse(*this);
+    }
+    else
+    {
+        //std::cout<<"Culling node"<<std::endl;
+    }
+#endif
+}
+
+void DispatchTraversal::apply(const CullNode& cullNode)
+{
+#if 0
+    // no culling
+    cullGroup.traverse(*this);
+#else
+    if (_data->intersect(cullNode.getBound()))
+    {
+        //std::cout<<"Passed node"<<std::endl;
+        cullNode.traverse(*this);
+    }
+    else
+    {
+        //std::cout<<"Culling node"<<std::endl;
+    }
+#endif
+}
+
 void DispatchTraversal::apply(const StateGroup& stateGroup)
 {
     //    std::cout<<"Visiting StateGroup "<<std::endl;
@@ -94,10 +198,36 @@ void DispatchTraversal::apply(const StateGroup& stateGroup)
 
     stateGroup.traverse(*this);
 
-    //    stateGroup.popFrom(_data->_state);
+    stateGroup.popFrom(_data->_state);
+}
+
+void DispatchTraversal::apply(const MatrixTransform& mt)
+{
+#if USE_TRANSFORM_ACCUMULATION
+    //std::cout<<"Using accumulation"<<std::endl;
+    _data->_state.modelMatrixStack.pushAndPreMult(mt.getMatrix());
+#else
+    _data->_state.modelMatrixStack.push(mt.getMatrix());
+#endif
+
+    _data->_state.dirty = true;
+
+    mt.traverse(*this);
+
+    _data->_state.modelMatrixStack.pop();
+    _data->_state.dirty = true;
 }
 
 // Vulkan nodes
+void DispatchTraversal::apply(const Commands& commands)
+{
+    _data->_state.dispatch(*(_data->_commandBuffer));
+    for (auto& command : commands.getChildren())
+    {
+        command->dispatch(*(_data->_commandBuffer));
+    }
+}
+
 void DispatchTraversal::apply(const Command& command)
 {
     //    std::cout<<"Visiting Command "<<std::endl;

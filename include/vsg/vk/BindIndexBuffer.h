@@ -19,9 +19,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace vsg
 {
 
-    class VSG_DECLSPEC BindIndexBuffer : public Inherit<StateComponent, BindIndexBuffer>
+    class VSG_DECLSPEC BindIndexBuffer : public Inherit<Command, BindIndexBuffer>
     {
     public:
+        BindIndexBuffer(Data* indices = nullptr) :
+            _bufferData(nullptr, 0, 0, indices),
+            _indexType(VK_INDEX_TYPE_UINT16) {}
+
         BindIndexBuffer(Buffer* buffer, VkDeviceSize offset, VkIndexType indexType) :
             _bufferData(buffer, offset, 0),
             _indexType(indexType) {}
@@ -30,8 +34,15 @@ namespace vsg
             _bufferData(bufferData),
             _indexType(indexType) {}
 
-        void pushTo(State& state) const override;
-        void popFrom(State& state) const override;
+        void setIndices(ref_ptr<Data> indices) { _bufferData._data = indices; }
+        Data* getIndices() { return _bufferData._data; }
+        const Data* getIndices() const { return _bufferData._data; }
+
+        void read(Input& input) override;
+        void write(Output& output) const override;
+
+        void compile(Context& context) override;
+
         void dispatch(CommandBuffer& commandBuffer) const override;
 
     protected:
@@ -40,5 +51,6 @@ namespace vsg
         BufferData _bufferData;
         VkIndexType _indexType;
     };
+    VSG_type_name(vsg::BindIndexBuffer);
 
 } // namespace vsg

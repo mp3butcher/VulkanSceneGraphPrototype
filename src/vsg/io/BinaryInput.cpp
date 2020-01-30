@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/io/BinaryInput.h>
+#include <vsg/io/ReaderWriter.h>
 
 #include <cstring>
 #include <iostream>
@@ -18,26 +19,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 using namespace vsg;
 
-BinaryInput::BinaryInput(std::istream& input) :
+BinaryInput::BinaryInput(std::istream& input, ref_ptr<ObjectFactory> in_objectFactory, ref_ptr<const Options> in_options) :
+    Input(in_objectFactory, in_options),
     _input(input)
 {
-    _input.imbue(std::locale::classic());
-
-    _objectFactory = new vsg::ObjectFactory;
-
-    // write header
-    const char* match_token = "#vsgb";
-    char read_token[5];
-    _input.read(read_token, 5);
-    if (std::strncmp(match_token, read_token, 5) != 0)
-    {
-        std::cout << "Binary Header token not matched" << std::endl;
-        throw std::string("Error: header not matched.");
-    }
-
-    char read_line[1024];
-    _input.getline(read_line, sizeof(read_line) - 1);
-    //std::cout << "First line [" << read_line << "]" << std::endl;
 }
 
 void BinaryInput::_read(std::string& value)
@@ -67,7 +52,7 @@ vsg::ref_ptr<vsg::Object> BinaryInput::read()
 {
     ObjectID id = objectID();
 
-    if (auto itr = _objectIDMap.find(id); itr != _objectIDMap.end())
+    if (auto itr = objectIDMap.find(id); itr != objectIDMap.end())
     {
         return itr->second;
     }
@@ -78,7 +63,7 @@ vsg::ref_ptr<vsg::Object> BinaryInput::read()
         vsg::ref_ptr<vsg::Object> object;
         if (className != "nullptr")
         {
-            object = _objectFactory->create(className.c_str());
+            object = objectFactory->create(className.c_str());
             if (object)
             {
                 object->read(*this);
@@ -89,7 +74,7 @@ vsg::ref_ptr<vsg::Object> BinaryInput::read()
             }
         }
 
-        _objectIDMap[id] = object;
+        objectIDMap[id] = object;
         return object;
     }
 }

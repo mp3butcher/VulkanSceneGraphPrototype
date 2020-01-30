@@ -53,7 +53,9 @@ PhysicalDevice::PhysicalDevice(Instance* instance, Surface* surface, int graphic
     _presentFamily(presentFamily),
     _computeFamily(computeFamily),
     _instance(instance),
-    _surface(surface),_device(VK_NULL_HANDLE)
+    _surface(surface),
+    _device(VK_NULL_HANDLE),
+    _queueFlags(0)
 {
 
 }

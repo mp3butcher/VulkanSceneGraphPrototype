@@ -86,7 +86,7 @@ Instance::Result Instance::create(Names& instanceExtensions, Names& layers, Allo
     std::cout << "allocator : " << allocator << std::endl;
 #endif
 
-    // applictin info
+    // application info
     VkApplicationInfo appInfo = {};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "Test";
@@ -103,6 +103,8 @@ Instance::Result Instance::create(Names& instanceExtensions, Names& layers, Allo
 
     createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
     createInfo.ppEnabledLayerNames = layers.empty() ? nullptr : layers.data();
+
+    createInfo.pNext = nullptr;
 
     VkInstance instance;
     VkResult result = vkCreateInstance(&createInfo, allocator, &instance);

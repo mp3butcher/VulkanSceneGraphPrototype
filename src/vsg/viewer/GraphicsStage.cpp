@@ -10,7 +10,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/nodes/StateGroup.h>
+
 #include <vsg/viewer/GraphicsStage.h>
+
+#include <vsg/traversals/CompileTraversal.h>
+
+#include <vsg/ui/ApplicationEvent.h>
 
 #include <array>
 #include <limits>
@@ -24,7 +30,8 @@ namespace vsg
     public:
         Context context;
 
-        UpdatePipeline() {}
+        UpdatePipeline(Device* device) :
+            context(device) {}
 
         void apply(vsg::BindGraphicsPipeline& bindPipeline)
         {
@@ -55,7 +62,7 @@ namespace vsg
 
                 if (needToRegenerateGraphicsPipeline)
                 {
-                    vsg::ref_ptr<vsg::GraphicsPipeline> new_pipeline = vsg::GraphicsPipeline::create(graphicsPipeline->getPipelineLayout(), graphicsPipeline->getPipelineStates());
+                    vsg::ref_ptr<vsg::GraphicsPipeline> new_pipeline = vsg::GraphicsPipeline::create(graphicsPipeline->getPipelineLayout(), graphicsPipeline->getShaderStages(), graphicsPipeline->getPipelineStates());
 
                     bindPipeline.release();
 
@@ -93,13 +100,13 @@ namespace vsg
 GraphicsStage::GraphicsStage(ref_ptr<Node> commandGraph, ref_ptr<Camera> camera) :
     _camera(camera),
     _commandGraph(commandGraph),
-    _projMatrix(new vsg::mat4Value),
-    _viewMatrix(new vsg::mat4Value),
+    _projMatrix(new vsg::dmat4Value),
+    _viewMatrix(new vsg::dmat4Value),
     _extent2D{std::numeric_limits<uint32_t>::max(), std::numeric_limits<uint32_t>::max()}
 {
 }
 
-void GraphicsStage::populateCommandBuffer(CommandBuffer* commandBuffer, Framebuffer* framebuffer, RenderPass* renderPass, const VkExtent2D& extent2D, const VkClearColorValue& clearColor)
+void GraphicsStage::populateCommandBuffer(CommandBuffer* commandBuffer, Framebuffer* framebuffer, RenderPass* renderPass, const VkExtent2D& extent2D, const VkClearColorValue& clearColor, ref_ptr<FrameStamp> frameStamp)
 {
     // handle any changes in window size
     if (_extent2D.width == std::numeric_limits<uint32_t>::max())
@@ -148,9 +155,8 @@ void GraphicsStage::populateCommandBuffer(CommandBuffer* commandBuffer, Framebuf
         _viewport->getViewport().height = static_cast<float>(extent2D.height);
         _viewport->getScissor().extent = extent2D;
 
-        vsg::UpdatePipeline updatePipeline;
+        vsg::UpdatePipeline updatePipeline(commandBuffer->getDevice());
 
-        updatePipeline.context.device = commandBuffer->getDevice();
         updatePipeline.context.commandPool = commandBuffer->getCommandPool();
         updatePipeline.context.renderPass = renderPass;
         updatePipeline.context.viewport = _viewport;
@@ -166,9 +172,11 @@ void GraphicsStage::populateCommandBuffer(CommandBuffer* commandBuffer, Framebuf
     }
 
     // set up the dispatching of the commands into the command buffer
-    DispatchTraversal dispatchTraversal(commandBuffer);
-    dispatchTraversal.setProjectionMatrix(_projMatrix->value());
-    dispatchTraversal.setViewMatrix(_viewMatrix->value());
+    DispatchTraversal dispatchTraversal(commandBuffer, _maxSlot, frameStamp);
+    dispatchTraversal.setProjectionAndViewMatrix(_projMatrix->value(), _viewMatrix->value());
+
+    dispatchTraversal.databasePager = databasePager;
+    if (databasePager) dispatchTraversal.culledPagedLODs = databasePager->culledPagedLODs;
 
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;

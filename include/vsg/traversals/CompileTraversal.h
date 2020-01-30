@@ -12,58 +12,73 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <deque>
 #include <memory>
+
 #include <vsg/core/Object.h>
 
 #include <vsg/nodes/Group.h>
 
+#include <vsg/vk/BufferData.h>
 #include <vsg/vk/CommandPool.h>
+#include <vsg/vk/Context.h>
+#include <vsg/vk/Descriptor.h>
 #include <vsg/vk/DescriptorPool.h>
+#include <vsg/vk/Fence.h>
 #include <vsg/vk/GraphicsPipeline.h>
+#include <vsg/vk/ResourceHints.h>
+
+#include <set>
 
 namespace vsg
 {
-    class Context
+    class CollectDescriptorStats : public ConstVisitor
     {
     public:
-        ref_ptr<Device> device;
-        ref_ptr<CommandPool> commandPool;
-        ref_ptr<RenderPass> renderPass;
-        ref_ptr<ViewportState> viewport;
-        VkQueue graphicsQueue = 0;
+        using Descriptors = std::set<const Descriptor*>;
+        using DescriptorSets = std::set<const DescriptorSet*>;
+        using DescriptorTypeMap = std::map<VkDescriptorType, uint32_t>;
 
-        ref_ptr<DescriptorPool> descriptorPool;
+        using ConstVisitor::apply;
 
-        ref_ptr<mat4Value> projMatrix;
-        ref_ptr<mat4Value> viewMatrix;
-#if 1
-        VkDeviceSize minimumBufferSize = 16 * 1024 * 1024;
-        VkDeviceSize minimumBufferDeviceMemorySize = 16 * 1024 * 1024;
-        VkDeviceSize minimumImageDeviceMemorySize = 16 * 1024 * 1024;
-#else
-        VkDeviceSize minimumBufferSize = 1; //1024 * 1024;
-        VkDeviceSize minimumBufferDeviceMemorySize = 1; //1024 * 1024;
-        VkDeviceSize minimumImageDeviceMemorySize = 1;  //1024 * 1024;
-#endif
+        bool checkForResourceHints(const Object& object);
 
-        using MemoryPools = std::vector<ref_ptr<DeviceMemory>>;
-        MemoryPools memoryPools;
+        void apply(const Object& object) override;
+        void apply(const ResourceHints& resourceHints) override;
+        void apply(const Node& node) override;
+        void apply(const StateGroup& stategroup) override;
+        void apply(const StateCommand& stateCommand) override;
+        void apply(const DescriptorSet& descriptorSet) override;
+        void apply(const Descriptor& descriptor) override;
 
-        using BufferPools = std::vector<ref_ptr<Buffer>>;
-        BufferPools bufferPools;
+        uint32_t computeNumDescriptorSets() const;
+
+        DescriptorPoolSizes computeDescriptorPoolSizes() const;
+
+        Descriptors descriptors;
+        DescriptorSets descriptorSets;
+        DescriptorTypeMap descriptorTypeMap;
+        uint32_t maxSlot = 0;
+        uint32_t externalNumDescriptorSets = 0;
     };
 
     class VSG_DECLSPEC CompileTraversal : public Visitor
     {
     public:
-        explicit CompileTraversal();
+        explicit CompileTraversal(Device* in_device, BufferPreferences bufferPreferences = {});
+        CompileTraversal(const CompileTraversal& ct);
         ~CompileTraversal();
 
-        void apply(Object& object);
-        void apply(Command& command);
-        void apply(Commands& commands);
-        void apply(StateGroup& stateGroup);
-        void apply(Geometry& geometry);
+        void apply(Object& object) override;
+        void apply(Command& command) override;
+        void apply(Commands& commands) override;
+        void apply(StateGroup& stateGroup) override;
+        void apply(Geometry& geometry) override;
+
+        void compile(Object* object);
+
+        ref_ptr<Fence> fence;
+        ref_ptr<Semaphore> semaphore;
 
         Context context;
     };

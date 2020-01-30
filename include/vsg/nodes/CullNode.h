@@ -17,23 +17,15 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 namespace vsg
 {
-#define USE_SPHERE_DOUBLE 0
 
     /** CullNode that enables view frustum culling on a single child node.
      * A valid node must always be assigned to a CullNode before it's used, as, for performance reasons, there are no internal checks made when accessing the child.*/
     class VSG_DECLSPEC CullNode : public Inherit<Node, CullNode>
     {
     public:
-#if USE_SPHERE_DOUBLE
-        using value_type = double;
-#else
-        using value_type = float;
-#endif
-        using Sphere = t_sphere<value_type>;
-
         CullNode(Allocator* allocator = nullptr);
 
-        CullNode(const sphere& bound, Node* child, Allocator* allocator = nullptr);
+        CullNode(const dsphere& bound, Node* child, Allocator* allocator = nullptr);
 
         void traverse(Visitor& visitor) override { _child->accept(visitor); }
         void traverse(ConstVisitor& visitor) const override { _child->accept(visitor); }
@@ -43,8 +35,8 @@ namespace vsg
         void read(Input& input) override;
         void write(Output& output) const override;
 
-        void setBound(const Sphere& bound) { _bound = bound; }
-        inline const Sphere& getBound() const { return _bound; }
+        void setBound(const dsphere& bound) { _bound = bound; }
+        inline const dsphere& getBound() const { return _bound; }
 
         void setChild(Node* child) { _child = child; }
         Node* getChild() { return _child; }
@@ -53,7 +45,7 @@ namespace vsg
     protected:
         virtual ~CullNode();
 
-        Sphere _bound;
+        dsphere _bound;
         ref_ptr<vsg::Node> _child;
     };
     VSG_type_name(vsg::CullNode);

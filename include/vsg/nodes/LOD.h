@@ -21,17 +21,31 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 namespace vsg
 {
-    VSG_type_name(vsg::LOD);
 
+    /** Level of Detail Node,
+     *  Children should be ordered with the highest resolution LODChild first, thought to lowest resolution LOD child last.
+     *  The LODChild struct stores the visibleHeightRatio and child that it's associated with.
+     *  During culling tHe visibleHeightRatio is used as a ratio of screen height that Bound sphere occupies on screen needs to be at least in order for the associated child to be traversed.
+     *  Once on child passes this test no more children are checked, so that no more than on child will ever being traversed in a cull or dispatch traversal.
+     *  If no LODChild pass the visible height test then none of the LOD's children will be visible.
+     *  During the cull or dispatch traversals the Bound sphere is also checked against the view frustum so that LOD's also enable view frustum culling for subgraphs so there is no need for a separate CullNode/CullGroup to decorate it. */
     class VSG_DECLSPEC LOD : public Inherit<Node, LOD>
     {
     public:
-        LOD() {}
+        LOD(Allocator* allocator = nullptr);
+
+        struct LODChild
+        {
+            double minimumScreenHeightRatio = 0.0; // 0.0 is always visible
+            ref_ptr<Node> child;
+        };
+
+        using Children = std::vector<LODChild>;
 
         template<class N, class V>
         static void t_traverse(N& node, V& visitor)
         {
-            for (auto& child : node._children) child->accept(visitor);
+            for (auto& lodChild : node._children) lodChild.child->accept(visitor);
         }
 
         void traverse(Visitor& visitor) override { t_traverse(*this, visitor); }
@@ -39,33 +53,29 @@ namespace vsg
         void traverse(DispatchTraversal& visitor) const override { t_traverse(*this, visitor); }
         void traverse(CullTraversal& visitor) const override { t_traverse(*this, visitor); }
 
+        void read(Input& input) override;
+        void write(Output& output) const override;
+
         void setBound(const dsphere& bound) { _bound = bound; }
-        const dsphere& getBound() const { return _bound; }
+        inline const dsphere& getBound() const { return _bound; }
 
-        /// set the minimum screen space area that a child is visible from
-        void setMinimumArea(std::size_t pos, double area) { _minimumAreas[pos] = area; }
-        double getMinimumArea(std::size_t pos) const { return _minimumAreas[pos]; }
+        void setChild(std::size_t pos, const LODChild& lodChild) { _children[pos] = lodChild; }
+        LODChild& getChild(std::size_t pos) { return _children[pos]; }
+        const LODChild& getChild(std::size_t pos) const { return _children[pos]; }
 
-        void setChild(std::size_t pos, Node* node) { _children[pos] = node; }
-        Node* getChild(std::size_t pos) { return _children[pos].get(); }
-        const Node* getChild(std::size_t pos) const { return _children[pos].get(); }
+        void addChild(const LODChild& lodChild) { _children.emplace_back(lodChild); }
 
-        std::size_t getNumChildren() const { return 2; }
+        std::size_t getNumChildren() const { return _children.size(); }
 
-        using MinimumAreas = std::array<double, 2>;
-        MinimumAreas& getMinimumAreas() { return _minimumAreas; }
-        const MinimumAreas& getMinimumAreas() const { return _minimumAreas; }
-
-        using Children = std::array<ref_ptr<Node>, 2>;
         Children& getChildren() { return _children; }
         const Children& getChildren() const { return _children; }
 
     protected:
-        virtual ~LOD() {}
+        virtual ~LOD();
 
         dsphere _bound;
-        MinimumAreas _minimumAreas;
         Children _children;
     };
+    VSG_type_name(vsg::LOD);
 
 } // namespace vsg

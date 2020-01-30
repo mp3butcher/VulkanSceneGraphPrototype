@@ -12,6 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/core/Data.h>
 #include <vsg/core/Object.h>
 
 #include <vsg/maths/box.h>
@@ -22,6 +23,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/maths/vec3.h>
 #include <vsg/maths/vec4.h>
 
+#include <vsg/io/FileSystem.h>
 #include <vsg/io/ObjectFactory.h>
 
 #include <unordered_map>
@@ -29,10 +31,17 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace vsg
 {
 
+    // forward declare
+    class Options;
+
     class Input
     {
     public:
-        /// return true if property name matches the next token in the stream, or if propery names are not required for format
+        Input(ref_ptr<ObjectFactory> in_objectFactory, ref_ptr<const Options> in_options = {});
+
+        Options& operator=(const Options& rhs) = delete;
+
+        /// return true if property name matches the next token in the stream, or if property names are not required for format
         virtual bool matchPropertyName(const char* propertyName) = 0;
 
         // read value(s)
@@ -65,6 +74,12 @@ namespace vsg
         void read(size_t num, ubvec2* value) { read(num * value->size(), value->data()); }
         void read(size_t num, ubvec3* value) { read(num * value->size(), value->data()); }
         void read(size_t num, ubvec4* value) { read(num * value->size(), value->data()); }
+        void read(size_t num, usvec2* value) { read(num * value->size(), value->data()); }
+        void read(size_t num, usvec3* value) { read(num * value->size(), value->data()); }
+        void read(size_t num, usvec4* value) { read(num * value->size(), value->data()); }
+        void read(size_t num, uivec2* value) { read(num * value->size(), value->data()); }
+        void read(size_t num, uivec3* value) { read(num * value->size(), value->data()); }
+        void read(size_t num, uivec4* value) { read(num * value->size(), value->data()); }
         void read(size_t num, mat4* value) { read(num * value->size(), value->data()); }
         void read(size_t num, dmat4* value) { read(num * value->size(), value->data()); }
         void read(size_t num, sphere* value) { read(num * value->size(), value->data()); }
@@ -76,7 +91,17 @@ namespace vsg
 
         // treat non standard type as raw data,
         template<typename T>
-        void read(size_t num, T* value) { read(num * sizeof(T), reinterpret_cast<uint8_t*>(value)); }
+        void read(size_t num, T* value)
+        {
+            if constexpr (has_read_write<T>())
+            {
+                for (size_t i = 0; i < num; ++i) value[i].read(*this);
+            }
+            else
+            {
+                read(num * sizeof(T), reinterpret_cast<uint8_t*>(value));
+            }
+        }
 
         // match property name and read value(s)
         template<typename... Args>
@@ -84,7 +109,7 @@ namespace vsg
         {
             if (!matchPropertyName(propertyName)) return;
 
-            // use fold expression to expand arugments and map to appropriate read method
+            // use fold expression to expand arguments and map to appropriate read method
             (read(1, &(args)), ...);
         }
 
@@ -115,7 +140,7 @@ namespace vsg
             return value;
         }
 
-        /// write a value casting it specified type i.e. output.write<uint32_t>("Value", value);
+        /// read a value as a type, then cast it another type
         template<typename W, typename T>
         void readValue(const char* propertyName, T& value)
         {
@@ -125,16 +150,15 @@ namespace vsg
         }
 
         using ObjectID = uint32_t;
-        using ObjectIDMap = std::unordered_map<ObjectID, vsg::ref_ptr<vsg::Object>>;
-        ObjectIDMap& getObjectIDMap() { return _objectIDMap; }
-        const ObjectIDMap& getObjectIDMap() const { return _objectIDMap; }
+        using ObjectIDMap = std::map<ObjectID, ref_ptr<Object>>;
 
-        vsg::ObjectFactory* getObjectFactory() { return _objectFactory; }
-        const vsg::ObjectFactory* getObjectFactory() const { return _objectFactory; }
+        ObjectIDMap objectIDMap;
+        ref_ptr<ObjectFactory> objectFactory;
+        ref_ptr<const Options> options;
+        Path filename;
 
     protected:
-        ObjectIDMap _objectIDMap;
-        vsg::ref_ptr<vsg::ObjectFactory> _objectFactory;
+        virtual ~Input();
     };
 
 } // namespace vsg

@@ -19,8 +19,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 namespace vsg
 {
-    // forward decalre Objects
+    // forward declare core Objects
     class Objects;
+    class External;
 
     // forward declare nodes classes
     class Node;
@@ -28,6 +29,7 @@ namespace vsg
     class Group;
     class QuadGroup;
     class LOD;
+    class PagedLOD;
     class StateGroup;
     class CullGroup;
     class CullNode;
@@ -37,10 +39,12 @@ namespace vsg
 
     // forward declare vulkan classes
     class Command;
+    class StateCommand;
     class CommandBuffer;
     class RenderPass;
     class BindDescriptorSet;
     class BindDescriptorSets;
+    class Descriptor;
     class DescriptorSet;
     class BindVertexBuffers;
     class BindIndexBuffer;
@@ -51,7 +55,7 @@ namespace vsg
     class Draw;
     class DrawIndexed;
     class GraphicsPipelineState;
-    class ShaderStages;
+    class ShaderStage;
     class VertexInputState;
     class InputAssemblyState;
     class ViewportState;
@@ -59,6 +63,7 @@ namespace vsg
     class MultisampleState;
     class DepthStencilState;
     class ColorBlendState;
+    class ResourceHints;
 
     // forward declare ui events classes
     class UIEvent;
@@ -90,6 +95,7 @@ namespace vsg
 
         virtual void apply(const Object&);
         virtual void apply(const Objects&);
+        virtual void apply(const External&);
 
         // Values
         virtual void apply(const stringValue&);
@@ -116,6 +122,8 @@ namespace vsg
         virtual void apply(const ubvec4Array&);
         virtual void apply(const mat4Array&);
         virtual void apply(const dmat4Array&);
+        virtual void apply(const block64Array&);
+        virtual void apply(const block128Array&);
 
         // Array2Ds
         virtual void apply(const ubyteArray2D&);
@@ -132,6 +140,8 @@ namespace vsg
         virtual void apply(const ubvec2Array2D&);
         virtual void apply(const ubvec3Array2D&);
         virtual void apply(const ubvec4Array2D&);
+        virtual void apply(const block64Array2D&);
+        virtual void apply(const block128Array2D&);
 
         // Array3Ds
         virtual void apply(const ubyteArray3D&);
@@ -148,6 +158,8 @@ namespace vsg
         virtual void apply(const ubvec2Array3D&);
         virtual void apply(const ubvec3Array3D&);
         virtual void apply(const ubvec4Array3D&);
+        virtual void apply(const block64Array3D&);
+        virtual void apply(const block128Array3D&);
 
         // Nodes
         virtual void apply(const Node&);
@@ -155,6 +167,7 @@ namespace vsg
         virtual void apply(const Group&);
         virtual void apply(const QuadGroup&);
         virtual void apply(const LOD&);
+        virtual void apply(const PagedLOD&);
         virtual void apply(const StateGroup&);
         virtual void apply(const CullGroup&);
         virtual void apply(const CullNode&);
@@ -164,10 +177,12 @@ namespace vsg
 
         // Vulkan nodes
         virtual void apply(const Command&);
+        virtual void apply(const StateCommand&);
         virtual void apply(const CommandBuffer&);
         virtual void apply(const RenderPass&);
         virtual void apply(const BindDescriptorSet&);
         virtual void apply(const BindDescriptorSets&);
+        virtual void apply(const Descriptor&);
         virtual void apply(const DescriptorSet&);
         virtual void apply(const BindVertexBuffers&);
         virtual void apply(const BindIndexBuffer&);
@@ -176,7 +191,7 @@ namespace vsg
         virtual void apply(const GraphicsPipeline&);
         virtual void apply(const ComputePipeline&);
         virtual void apply(const GraphicsPipelineState&);
-        virtual void apply(const ShaderStages&);
+        virtual void apply(const ShaderStage&);
         virtual void apply(const VertexInputState&);
         virtual void apply(const InputAssemblyState&);
         virtual void apply(const ViewportState&);
@@ -184,6 +199,7 @@ namespace vsg
         virtual void apply(const MultisampleState&);
         virtual void apply(const DepthStencilState&);
         virtual void apply(const ColorBlendState&);
+        virtual void apply(const ResourceHints&);
 
         // ui events
         virtual void apply(const UIEvent&);

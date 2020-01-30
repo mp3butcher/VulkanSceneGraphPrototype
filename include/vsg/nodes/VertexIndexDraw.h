@@ -38,14 +38,14 @@ namespace vsg
         using VkBuffers = std::vector<VkBuffer>;
         using Offsets = std::vector<VkDeviceSize>;
 
-        // vkCmdBindVertexBuffers settinggs
+        // vkCmdBindVertexBuffers settings
         // vkCmdBindVertexBuffers(commandBuffer, _firstBinding, static_cast<uint32_t>(_vkBuffers.size()), _vkBuffers.data(), _offsets.data());
         uint32_t _firstBinding = 0;
         Buffers _buffers;
         VkBuffers _vkBuffers;
         Offsets _offsets;
 
-        // vkCmdBindIndexBuffer setttings;
+        // vkCmdBindIndexBuffer settings;
         // vkCmdBindIndexBuffer(commandBuffer, *_bufferData._buffer, _bufferData._offset, _indexType);
         BufferData _bufferData;
         VkIndexType _indexType = VK_INDEX_TYPE_UINT16;
@@ -61,6 +61,9 @@ namespace vsg
         // settings
         DataList _arrays;
         ref_ptr<Data> _indices;
+
+    protected:
+        virtual ~VertexIndexDraw();
     };
     VSG_type_name(vsg::VertexIndexDraw)
 

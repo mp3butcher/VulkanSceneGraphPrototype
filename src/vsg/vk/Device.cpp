@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/vk/Device.h>
+#include <vsg/vk/Queue.h>
 
 #include <set>
 
@@ -39,7 +40,7 @@ bool Device::vkDestroy() {
 }
 
 bool Device::vkCreate() {
-    if (!_physicalDevice)
+    if (!*_physicalDevice)
     {
         return false ;//Device::Result("Error: vsg::Device::create(...) failed to create logical device, undefined PhysicalDevice.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
     }
@@ -63,15 +64,28 @@ bool Device::vkCreate() {
         }
     }
 
-    _deviceCreateInfo.queueCreateInfoCount =  static_cast<uint32_t>(queueCreateInfos.size());
+    _deviceCreateInfo.queueCreateInfoCount =  static_cast<uint32_t>(_queueCreateInfos.size());
     _deviceCreateInfo.pQueueCreateInfos = _queueCreateInfos.empty() ? nullptr : _queueCreateInfos.data();
 
     _deviceCreateInfo.pEnabledFeatures = &_deviceFeatures;
+/*
+    float queuePriority = 1.0f;
+    for (int queueFamily : uniqueQueueFamiles)
+    {
+        VkDeviceQueueCreateInfo queueCreateInfo = {};
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = queueFamily;
+        queueCreateInfo.queueCount = 1;
+        queueCreateInfo.pQueuePriorities = &queuePriority;
+        queueCreateInfo.pNext = nullptr;
+        queueCreateInfos.push_back(queueCreateInfo);
+    }
+*/
 
-    _deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+    _deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(_deviceExtensions.size());
     _deviceCreateInfo.ppEnabledExtensionNames = _deviceExtensions.empty() ? nullptr : _deviceExtensions.data();
 
-    _deviceCreateInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
+    _deviceCreateInfo.enabledLayerCount = static_cast<uint32_t>(_layers.size());
     _deviceCreateInfo.ppEnabledLayerNames = _layers.empty() ? nullptr : _layers.data();
 
 
@@ -83,20 +97,27 @@ bool Device::vkCreate() {
 
     return true;
 
+/*
+    createInfo.pNext = nullptr;
 
+    VkDevice device;
+    VkResult result = vkCreateDevice(*physicalDevice, &createInfo, allocator, &device);
+    if (result == VK_SUCCESS)
+    {
+        return Result(new Device(device, physicalDevice, allocator));
+    }
+    else
+    {
+        return Device::Result("Error: vsg::Device::create(...) failed to create logical device.", result);
+    }
+*/
 }
 
-VkQueue Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex)
-{
-    VkQueue queue;
-    vkGetDeviceQueue(_device, queueFamilyIndex, queueIndex, &queue);
-    return queue;
-}/*
 Queue * Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex){
     Queue * q=new Queue(this,queueFamilyIndex,queueIndex);
     q->vkUpdate();
     return q;
 }
-*/
+
 
 

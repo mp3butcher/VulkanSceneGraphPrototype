@@ -21,6 +21,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/core/ConstVisitor.h>
 #include <vsg/core/Data.h>
 #include <vsg/core/Export.h>
+#include <vsg/core/External.h>
 #include <vsg/core/Inherit.h>
 #include <vsg/core/Object.h>
 #include <vsg/core/Objects.h>
@@ -53,6 +54,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/nodes/LOD.h>
 #include <vsg/nodes/MatrixTransform.h>
 #include <vsg/nodes/Node.h>
+#include <vsg/nodes/PagedLOD.h>
 #include <vsg/nodes/QuadGroup.h>
 #include <vsg/nodes/StateGroup.h>
 #include <vsg/nodes/VertexIndexDraw.h>
@@ -62,6 +64,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/traversals/ComputeBounds.h>
 #include <vsg/traversals/CullTraversal.h>
 #include <vsg/traversals/DispatchTraversal.h>
+
+// Threading header files
+#include <vsg/threading/OperationQueue.h>
+#include <vsg/threading/OperationThreads.h>
+#include <vsg/threading/atomics.h>
 
 // User Interface abstraction header files
 #include <vsg/ui/ApplicationEvent.h>
@@ -76,8 +83,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/viewer/Camera.h>
 #include <vsg/viewer/CloseHandler.h>
 #include <vsg/viewer/GraphicsStage.h>
+#include <vsg/viewer/ProjectionMatrix.h>
 #include <vsg/viewer/Trackball.h>
 #include <vsg/viewer/View.h>
+#include <vsg/viewer/ViewMatrix.h>
 #include <vsg/viewer/Viewer.h>
 #include <vsg/viewer/Window.h>
 
@@ -92,10 +101,14 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/vk/CommandBuffer.h>
 #include <vsg/vk/CommandPool.h>
 #include <vsg/vk/ComputePipeline.h>
+#include <vsg/vk/Context.h>
 #include <vsg/vk/Descriptor.h>
+#include <vsg/vk/DescriptorBuffer.h>
+#include <vsg/vk/DescriptorImage.h>
 #include <vsg/vk/DescriptorPool.h>
 #include <vsg/vk/DescriptorSet.h>
 #include <vsg/vk/DescriptorSetLayout.h>
+#include <vsg/vk/DescriptorTexelBufferView.h>
 #include <vsg/vk/Device.h>
 #include <vsg/vk/DeviceMemory.h>
 #include <vsg/vk/Dispatch.h>
@@ -105,17 +118,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/vk/Framebuffer.h>
 #include <vsg/vk/GraphicsPipeline.h>
 #include <vsg/vk/Image.h>
+#include <vsg/vk/ImageData.h>
 #include <vsg/vk/ImageView.h>
 #include <vsg/vk/Instance.h>
 #include <vsg/vk/MemoryManager.h>
 #include <vsg/vk/PhysicalDevice.h>
 #include <vsg/vk/PipelineLayout.h>
 #include <vsg/vk/PushConstants.h>
+#include <vsg/vk/Queue.h>
 #include <vsg/vk/RenderPass.h>
+#include <vsg/vk/ResourceHints.h>
 #include <vsg/vk/Sampler.h>
 #include <vsg/vk/Semaphore.h>
 #include <vsg/vk/ShaderModule.h>
+#include <vsg/vk/ShaderStage.h>
+#include <vsg/vk/Stage.h>
 #include <vsg/vk/State.h>
+#include <vsg/vk/SubmitCommands.h>
 #include <vsg/vk/Surface.h>
 #include <vsg/vk/Swapchain.h>
 
@@ -124,14 +143,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/io/AsciiOutput.h>
 #include <vsg/io/BinaryInput.h>
 #include <vsg/io/BinaryOutput.h>
+#include <vsg/io/DatabasePager.h>
 #include <vsg/io/FileSystem.h>
 #include <vsg/io/Input.h>
+#include <vsg/io/ObjectCache.h>
 #include <vsg/io/ObjectFactory.h>
+#include <vsg/io/Options.h>
 #include <vsg/io/Output.h>
 #include <vsg/io/ReaderWriter.h>
+#include <vsg/io/ReaderWriter_vsg.h>
+#include <vsg/io/read.h>
 #include <vsg/io/stream.h>
+#include <vsg/io/write.h>
 
-// Utiltiy header files
+// Utility header files
 #include <vsg/utils/CommandLine.h>
 
 // Introspection header files

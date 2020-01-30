@@ -11,9 +11,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/vk/BindIndexBuffer.h>
-#include <vsg/vk/State.h>
+#include <vsg/vk/CommandBuffer.h>
 
 using namespace vsg;
+
+BindIndexBuffer::BindIndexBuffer(Data* indices) :
+    _bufferData(nullptr, 0, 0, indices),
+    _indexType(computeIndexType(indices))
+{
+}
+
+BindIndexBuffer::BindIndexBuffer(const BufferData& bufferData) :
+    _bufferData(bufferData),
+    _indexType(computeIndexType(bufferData._data))
+{
+}
+
+BindIndexBuffer::~BindIndexBuffer()
+{
+    if (_bufferData._buffer)
+    {
+        _bufferData._buffer->release(_bufferData._offset, 0); // TODO, we don't locally have a size allocated
+    }
+}
 
 void BindIndexBuffer::read(Input& input)
 {
@@ -46,9 +66,10 @@ void BindIndexBuffer::compile(Context& context)
     // check if already compiled
     if (_bufferData._buffer) return;
 
-    auto bufferDataList = vsg::createBufferAndTransferData(context, {_bufferData._data}, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_SHARING_MODE_EXCLUSIVE);
+    auto bufferDataList = vsg::createBufferAndTransferData(context, { _bufferData._data}, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_SHARING_MODE_EXCLUSIVE);
     if (!bufferDataList.empty())
     {
         _bufferData = bufferDataList.back();
+        _indexType = computeIndexType(_bufferData._data);
     }
 }

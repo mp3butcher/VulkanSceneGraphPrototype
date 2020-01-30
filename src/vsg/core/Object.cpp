@@ -55,7 +55,7 @@ Object::~Object()
     }
 }
 
-void Object::_delete() const
+void Object::_attemptDelete() const
 {
     // what should happen when _delete is called on an Object with ref() of zero?  Need to decide whether this buggy application usage should be tested for.
 
@@ -148,7 +148,7 @@ void Object::write(Output& output) const
 {
     if (_auxiliary && _auxiliary->getConnectedObject() == this)
     {
-        // we have a unique auxuliary, need to write out it's ObjectMap entries
+        // we have a unique auxiliary, need to write out it's ObjectMap entries
         const Auxiliary::ObjectMap& objectMap = _auxiliary->getObjectMap();
         output.writeValue<uint32_t>("NumUserObjects", objectMap.size());
         for (auto& entry : objectMap)

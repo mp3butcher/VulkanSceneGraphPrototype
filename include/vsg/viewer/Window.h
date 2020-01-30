@@ -12,11 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#if __APPLE__
-#    include <experimental/any>
-#else
-#    include <any>
-#endif
+#include <any>
 
 #include <vsg/ui/UIEvent.h>
 
@@ -25,16 +21,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/vk/DeviceMemory.h>
 #include <vsg/vk/Framebuffer.h>
 #include <vsg/vk/Semaphore.h>
-#include <vsg/vk/State.h>
+#include <vsg/vk/Fence.h>
+#include <vsg/vk/Stage.h>
 
 namespace vsg
 {
-
-#if __APPLE__
-    using std_any = std::experimental::any;
-#else
-    using std_any = std::any;
-#endif
 
     class VSG_DECLSPEC Window : public Inherit<Object, Window>
     {
@@ -82,11 +73,14 @@ namespace vsg
 
             SwapchainPreferences swapchainPreferences;
 
+            vsg::Names instanceExtensionNames;
+            vsg::Names deviceExtensionNames;
+
             Window* shareWindow = nullptr;
 
             AllocationCallbacks* allocator = nullptr;
 
-            std_any nativeHandle;
+            std::any nativeHandle;
             void* nativeWindow;
 
         protected:
@@ -96,7 +90,7 @@ namespace vsg
         using Result = vsg::Result<Window, VkResult, VK_SUCCESS>;
         static Result create(vsg::ref_ptr<Traits> traits);
 
-        // for backward compatability
+        // for backward compatibility
         static Result create(uint32_t width, uint32_t height, bool debugLayer = false, bool apiDumpLayer = false, vsg::Window* shareWindow = nullptr, vsg::AllocationCallbacks* allocator = nullptr);
         static Result create(vsg::ref_ptr<Traits> traits, bool debugLayer, bool apiDumpLayer = false, vsg::AllocationCallbacks* allocator = nullptr);
 
@@ -169,7 +163,7 @@ namespace vsg
 
         bool debugLayersEnabled() const { return _traits->debugLayer; }
 
-        void populateCommandBuffers(uint32_t index);
+        void populateCommandBuffers(uint32_t index, ref_ptr<vsg::FrameStamp> frameStamp);
 
         struct Frame
         {
@@ -217,12 +211,12 @@ namespace vsg
         ref_ptr<DeviceMemory> _depthImageMemory;
         ref_ptr<ImageView> _depthImageView;
 
-        ref_ptr<Semaphore> _imageAvailableSemaphore;
-
         Frames _frames;
         uint32_t _nextImageIndex;
 
         Stages _stages;
     };
+
+    using Windows = std::vector<ref_ptr<Window>>;
 
 } // namespace vsg

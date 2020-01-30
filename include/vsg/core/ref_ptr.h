@@ -63,7 +63,7 @@ namespace vsg
 
             if (_ptr) _ptr->ref();
 
-            // unref the original pointer after ref incase the old pointer object a parent of the new pointers object
+            // unref the original pointer after ref in case the old pointer object a parent of the new pointers object
             if (temp_ptr) temp_ptr->unref();
 
             return *this;
@@ -79,7 +79,7 @@ namespace vsg
 
             if (_ptr) _ptr->ref();
 
-            // unref the original pointer after ref incase the old pointer object a parent of the new pointers object
+            // unref the original pointer after ref in case the old pointer object a parent of the new pointers object
             if (temp_ptr) temp_ptr->unref();
 
             return *this;
@@ -96,7 +96,7 @@ namespace vsg
 
             if (_ptr) _ptr->ref();
 
-            // unref the original pointer after ref incase the old pointer object a parent of the new pointers object
+            // unref the original pointer after ref in case the old pointer object a parent of the new pointers object
             if (temp_ptr) temp_ptr->unref();
 
             return *this;
@@ -131,6 +131,9 @@ namespace vsg
             _ptr = rhs._ptr;
             rhs._ptr = temp_ptr;
         }
+
+        template<class R>
+        ref_ptr<R> cast() const { return ref_ptr<R>(dynamic_cast<R*>(_ptr)); }
 
     protected:
         template<class R>

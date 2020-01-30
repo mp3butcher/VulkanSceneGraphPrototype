@@ -60,12 +60,16 @@ namespace vsg
             value{s[0], s[1], s[2], s[3]} {}
 
         template<typename R>
-        constexpr explicit t_sphere(const t_sphere<R>& s) :
+        constexpr t_sphere(const t_sphere<R>& s) :
             value{static_cast<value_type>(s[0]), static_cast<value_type>(s[1]), static_cast<value_type>(s[2]), static_cast<value_type>(s[3])} {}
 
         template<typename R>
         constexpr t_sphere(const t_vec3<R>& c, T rad) :
             value{static_cast<value_type>(c.x), static_cast<value_type>(c.y), static_cast<value_type>(c.z), rad} {}
+
+        template<typename R>
+        constexpr t_sphere(R sx, R sy, R sz, R sd) :
+            value{sx, sy, sz, sd} {}
 
         constexpr std::size_t size() const { return 4; }
 

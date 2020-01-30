@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/io/FileSystem.h>
+#include <vsg/io/Options.h>
 
 #if defined(WIN32) && !defined(__CYGWIN__)
 #    include <cstdlib>
@@ -78,12 +79,57 @@ bool vsg::fileExists(const Path& path)
 #endif
 }
 
+Path vsg::filePath(const Path& path)
+{
+    std::string::size_type slash = path.find_last_of(PATH_SEPARATORS);
+    if (slash != std::string::npos)
+    {
+        return path.substr(0, slash);
+    }
+    else
+    {
+        return Path();
+    }
+}
+
 Path vsg::fileExtension(const Path& path)
 {
     std::string::size_type dot = path.find_last_of('.');
     std::string::size_type slash = path.find_last_of(PATH_SEPARATORS);
-    if (dot == std::string::npos || (slash != std::string::npos && dot < slash)) return Path{};
+    if (dot == std::string::npos || (slash != std::string::npos && dot < slash)) return Path();
     return path.substr(dot + 1);
+}
+
+Path vsg::simpleFilename(const Path& path)
+{
+    std::string::size_type dot = path.find_last_of('.');
+    std::string::size_type slash = path.find_last_of(PATH_SEPARATORS);
+    if (slash != std::string::npos)
+    {
+        if ((dot == std::string::npos) || (dot < slash))
+            return path.substr(slash + 1);
+        else
+            return path.substr(slash + 1, dot - slash - 1);
+    }
+    else
+    {
+        if (dot == std::string::npos)
+            return path;
+        else
+            return path.substr(0, dot);
+    }
+}
+
+Path vsg::removeExtension(const Path& path)
+{
+    std::string::size_type dot = path.find_last_of('.');
+    std::string::size_type slash = path.find_last_of(PATH_SEPARATORS);
+    if (dot == std::string::npos || (slash != std::string::npos && dot < slash))
+        return path;
+    else if (dot > 1)
+        return path.substr(0, dot);
+    else
+        return Path();
 }
 
 Path vsg::concatPaths(const Path& left, const Path& right)
@@ -119,4 +165,16 @@ Path vsg::findFile(const Path& filename, const Paths& paths)
         }
     }
     return Path();
+}
+
+Path vsg::findFile(const Path& filename, const Options* options)
+{
+    if (options && !options->paths.empty())
+    {
+        return findFile(filename, options->paths);
+    }
+    else
+    {
+        return fileExists(filename) ? filename : Path();
+    }
 }

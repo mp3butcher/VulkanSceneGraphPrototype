@@ -12,6 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/core/Data.h>
 #include <vsg/core/Object.h>
 
 #include <vsg/maths/box.h>
@@ -22,6 +23,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/maths/vec3.h>
 #include <vsg/maths/vec4.h>
 
+#include <vsg/io/FileSystem.h>
+
 #include <unordered_map>
 
 namespace vsg
@@ -30,10 +33,17 @@ namespace vsg
     class Output
     {
     public:
-        // write property name if appropriate for format
+        Output(ref_ptr<const Options> in_options = {});
+
+        Options& operator=(const Options& rhs) = delete;
+
+        /// write property name if appropriate for format
         virtual void writePropertyName(const char* propertyName) = 0;
 
-        // write contiguous array of value(s)
+        /// write end of line character if required.
+        virtual void writeEndOfLine() = 0;
+
+        /// write contiguous array of value(s)
         virtual void write(size_t num, const int8_t* values) = 0;
         virtual void write(size_t num, const uint8_t* value) = 0;
         virtual void write(size_t num, const int16_t* value) = 0;
@@ -46,10 +56,10 @@ namespace vsg
         virtual void write(size_t num, const double* value) = 0;
         virtual void write(size_t num, const std::string* value) = 0;
 
-        // write object
+        /// write object
         virtual void write(const Object* object) = 0;
 
-        // map char to int8_t
+        /// map char to int8_t
         void write(size_t num, const char* value) { write(num, reinterpret_cast<const int8_t*>(value)); }
         void write(size_t num, const bool* value) { write(num, reinterpret_cast<const int8_t*>(value)); }
 
@@ -63,6 +73,12 @@ namespace vsg
         void write(size_t num, const ubvec2* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const ubvec3* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const ubvec4* value) { write(num * value->size(), value->data()); }
+        void write(size_t num, const usvec2* value) { write(num * value->size(), value->data()); }
+        void write(size_t num, const usvec3* value) { write(num * value->size(), value->data()); }
+        void write(size_t num, const usvec4* value) { write(num * value->size(), value->data()); }
+        void write(size_t num, const uivec2* value) { write(num * value->size(), value->data()); }
+        void write(size_t num, const uivec3* value) { write(num * value->size(), value->data()); }
+        void write(size_t num, const uivec4* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const mat4* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const dmat4* value) { write(num * value->size(), value->data()); }
         void write(size_t num, const sphere* value) { write(num * value->size(), value->data()); }
@@ -73,7 +89,17 @@ namespace vsg
         void write(size_t num, const dplane* value) { write(num * value->size(), value->data()); }
 
         template<typename T>
-        void write(size_t num, const T* value) { write(num * sizeof(T), reinterpret_cast<const uint8_t*>(value)); }
+        void write(size_t num, const T* value)
+        {
+            if constexpr (has_read_write<T>())
+            {
+                for (size_t i = 0; i < num; ++i) value[i].write(*this);
+            }
+            else
+            {
+                write(num * sizeof(T), reinterpret_cast<const uint8_t*>(value));
+            }
+        }
 
         // match propertyname and write value(s)
         template<typename... Args>
@@ -81,8 +107,10 @@ namespace vsg
         {
             writePropertyName(propertyName);
 
-            // use fold expression to expand arugments and map to appropriate write method
+            // use fold expression to expand arguments and map to appropriate write method
             (write(1, &(args)), ...);
+
+            writeEndOfLine();
         }
 
         void writeObject(const char* propertyName, const Object* object)
@@ -99,12 +127,15 @@ namespace vsg
             write(propertyName, v);
         }
 
-    protected:
         using ObjectID = uint32_t;
         using ObjectIDMap = std::unordered_map<const vsg::Object*, ObjectID>;
 
-        ObjectIDMap _objectIDMap;
-        ObjectID _objectID = 0;
+        ObjectID objectID = 0;
+        ObjectIDMap objectIDMap;
+        ref_ptr<const Options> options;
+
+    protected:
+        virtual ~Output();
     };
 
 } // namespace vsg

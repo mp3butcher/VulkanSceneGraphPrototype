@@ -12,6 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/io/Options.h>
 #include <vsg/io/Output.h>
 
 #include <fstream>
@@ -22,10 +23,13 @@ namespace vsg
     class VSG_DECLSPEC BinaryOutput : public vsg::Output
     {
     public:
-        explicit BinaryOutput(std::ostream& output);
+        explicit BinaryOutput(std::ostream& output, ref_ptr<const Options> in_options = {});
 
-        // write property name if appropriate for format
+        /// write property name an non op for binary
         void writePropertyName(const char*) override {}
+
+        /// write end of line a non op for binary
+        void writeEndOfLine() override {}
 
         template<typename T>
         void _write(size_t num, const T* value)
@@ -54,7 +58,7 @@ namespace vsg
 
         void write(size_t num, const std::string* value) override;
 
-        // write object
+        /// write object
         void write(const vsg::Object* object) override;
 
     protected:

@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/io/AsciiInput.h>
+#include <vsg/io/ReaderWriter.h>
 
 #include <cstring>
 #include <iostream>
@@ -18,26 +19,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 using namespace vsg;
 
-AsciiInput::AsciiInput(std::istream& input) :
+AsciiInput::AsciiInput(std::istream& input, ref_ptr<ObjectFactory> in_objectFactory, ref_ptr<const Options> in_options) :
+    Input(in_objectFactory, in_options),
     _input(input)
 {
-    _input.imbue(std::locale::classic());
-
-    _objectFactory = new vsg::ObjectFactory;
-
-    // write header
-    const char* match_token = "#vsga";
-    char read_token[5];
-    _input.read(read_token, 5);
-    if (std::strncmp(match_token, read_token, 5) != 0)
-    {
-        std::cout << "Header token not matched" << std::endl;
-        throw std::string("Error: header not matched.");
-    }
-
-    char read_line[1024];
-    _input.getline(read_line, sizeof(read_line) - 1);
-    //std::cout << "First line [" << read_line << "]" << std::endl;
 }
 
 bool AsciiInput::matchPropertyName(const char* propertyName)
@@ -132,7 +117,7 @@ vsg::ref_ptr<vsg::Object> AsciiInput::read()
         ObjectID id = result.second;
         //std::cout<<"   matched result="<<id<<std::endl;
 
-        if (auto itr = _objectIDMap.find(id); itr != _objectIDMap.end())
+        if (auto itr = objectIDMap.find(id); itr != objectIDMap.end())
         {
             //std::cout<<"Returning existing object "<<itr->second.get()<<std::endl;
             return itr->second;
@@ -148,7 +133,7 @@ vsg::ref_ptr<vsg::Object> AsciiInput::read()
 
             if (className != "nullptr")
             {
-                object = _objectFactory->create(className.c_str());
+                object = objectFactory->create(className.c_str());
 
                 if (object)
                 {
@@ -156,7 +141,7 @@ vsg::ref_ptr<vsg::Object> AsciiInput::read()
 
                     object->read(*this);
 
-                    //std::cout<<"Loaded object, assigning to _objectIDMap."<<object.get()<<std::endl;
+                    //std::cout<<"Loaded object, assigning to objectIDMap."<<object.get()<<std::endl;
 
                     matchPropertyName("}");
                 }
@@ -166,7 +151,7 @@ vsg::ref_ptr<vsg::Object> AsciiInput::read()
                 }
             }
 
-            _objectIDMap[id] = object;
+            objectIDMap[id] = object;
 
             return object;
         }

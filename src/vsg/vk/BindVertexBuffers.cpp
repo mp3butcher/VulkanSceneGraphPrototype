@@ -11,9 +11,23 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/vk/BindVertexBuffers.h>
-#include <vsg/vk/State.h>
+#include <vsg/vk/CommandBuffer.h>
+
+#include <vsg/traversals/CompileTraversal.h>
 
 using namespace vsg;
+
+BindVertexBuffers::~BindVertexBuffers()
+{
+    size_t numBufferEntries = std::min(_buffers.size(), _offsets.size());
+    for (size_t i = 0; i < numBufferEntries; ++i)
+    {
+        if (_buffers[i])
+        {
+            _buffers[i]->release(_offsets[i], 0); // TODO
+        }
+    }
+}
 
 void BindVertexBuffers::read(Input& input)
 {
@@ -54,7 +68,7 @@ void BindVertexBuffers::compile(Context& context)
     if (_arrays.empty()) return;
 
     // already compiled
-    if (_buffers.size()==_arrays.size()) return;
+    if (_buffers.size() == _arrays.size()) return;
 
     _buffers.clear();
     _vkBuffers.clear();

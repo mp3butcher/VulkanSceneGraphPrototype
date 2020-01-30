@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/ConstVisitor.h>
+#include <vsg/core/External.h>
 #include <vsg/core/Objects.h>
 
 #include <vsg/nodes/Commands.h>
@@ -21,18 +22,21 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/nodes/LOD.h>
 #include <vsg/nodes/MatrixTransform.h>
 #include <vsg/nodes/Node.h>
+#include <vsg/nodes/PagedLOD.h>
 #include <vsg/nodes/QuadGroup.h>
 #include <vsg/nodes/StateGroup.h>
 #include <vsg/nodes/VertexIndexDraw.h>
 
+#include <vsg/vk/BindIndexBuffer.h>
+#include <vsg/vk/BindVertexBuffers.h>
 #include <vsg/vk/Command.h>
 #include <vsg/vk/CommandBuffer.h>
 #include <vsg/vk/ComputePipeline.h>
+#include <vsg/vk/Descriptor.h>
 #include <vsg/vk/DescriptorSet.h>
 #include <vsg/vk/GraphicsPipeline.h>
 #include <vsg/vk/RenderPass.h>
-#include <vsg/vk/BindVertexBuffers.h>
-#include <vsg/vk/BindIndexBuffer.h>
+#include <vsg/vk/ResourceHints.h>
 
 #include <vsg/ui/ApplicationEvent.h>
 #include <vsg/ui/KeyEvent.h>
@@ -50,6 +54,11 @@ void ConstVisitor::apply(const Object&)
 }
 
 void ConstVisitor::apply(const Objects& value)
+{
+    apply(static_cast<const Object&>(value));
+}
+
+void ConstVisitor::apply(const External& value)
 {
     apply(static_cast<const Object&>(value));
 }
@@ -151,6 +160,14 @@ void ConstVisitor::apply(const dmat4Array& value)
 {
     apply(static_cast<const Object&>(value));
 }
+void ConstVisitor::apply(const block64Array& value)
+{
+    apply(static_cast<const Object&>(value));
+}
+void ConstVisitor::apply(const block128Array& value)
+{
+    apply(static_cast<const Object&>(value));
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -209,6 +226,14 @@ void ConstVisitor::apply(const ubvec3Array2D& value)
     apply(static_cast<const Object&>(value));
 }
 void ConstVisitor::apply(const ubvec4Array2D& value)
+{
+    apply(static_cast<const Object&>(value));
+}
+void ConstVisitor::apply(const block64Array2D& value)
+{
+    apply(static_cast<const Object&>(value));
+}
+void ConstVisitor::apply(const block128Array2D& value)
 {
     apply(static_cast<const Object&>(value));
 }
@@ -273,6 +298,14 @@ void ConstVisitor::apply(const ubvec4Array3D& value)
 {
     apply(static_cast<const Object&>(value));
 }
+void ConstVisitor::apply(const block64Array3D& value)
+{
+    apply(static_cast<const Object&>(value));
+}
+void ConstVisitor::apply(const block128Array3D& value)
+{
+    apply(static_cast<const Object&>(value));
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -295,6 +328,10 @@ void ConstVisitor::apply(const QuadGroup& value)
     apply(static_cast<const Node&>(value));
 }
 void ConstVisitor::apply(const LOD& value)
+{
+    apply(static_cast<const Node&>(value));
+}
+void ConstVisitor::apply(const PagedLOD& value)
 {
     apply(static_cast<const Node&>(value));
 }
@@ -331,6 +368,10 @@ void ConstVisitor::apply(const Command& value)
 {
     apply(static_cast<const Node&>(value));
 }
+void ConstVisitor::apply(const StateCommand& value)
+{
+    apply(static_cast<const Command&>(value));
+}
 void ConstVisitor::apply(const CommandBuffer& value)
 {
     apply(static_cast<const Object&>(value));
@@ -341,13 +382,17 @@ void ConstVisitor::apply(const RenderPass& value)
 }
 void ConstVisitor::apply(const BindDescriptorSet& value)
 {
-    apply(static_cast<const Command&>(value));
+    apply(static_cast<const StateCommand&>(value));
 }
 void ConstVisitor::apply(const BindDescriptorSets& value)
 {
-    apply(static_cast<const Command&>(value));
+    apply(static_cast<const StateCommand&>(value));
 }
 void ConstVisitor::apply(const DescriptorSet& value)
+{
+    apply(static_cast<const Object&>(value));
+}
+void ConstVisitor::apply(const Descriptor& value)
 {
     apply(static_cast<const Object&>(value));
 }
@@ -361,11 +406,11 @@ void ConstVisitor::apply(const BindIndexBuffer& value)
 }
 void ConstVisitor::apply(const BindComputePipeline& value)
 {
-    apply(static_cast<const Object&>(value));
+    apply(static_cast<const StateCommand&>(value));
 }
 void ConstVisitor::apply(const BindGraphicsPipeline& value)
 {
-    apply(static_cast<const Object&>(value));
+    apply(static_cast<const StateCommand&>(value));
 }
 void ConstVisitor::apply(const GraphicsPipeline& value)
 {
@@ -379,9 +424,9 @@ void ConstVisitor::apply(const GraphicsPipelineState& value)
 {
     apply(static_cast<const Object&>(value));
 }
-void ConstVisitor::apply(const ShaderStages& value)
+void ConstVisitor::apply(const ShaderStage& value)
 {
-    apply(static_cast<const GraphicsPipelineState&>(value));
+    apply(static_cast<const Object&>(value));
 }
 void ConstVisitor::apply(const VertexInputState& value)
 {
@@ -410,6 +455,10 @@ void ConstVisitor::apply(const DepthStencilState& value)
 void ConstVisitor::apply(const ColorBlendState& value)
 {
     apply(static_cast<const GraphicsPipelineState&>(value));
+}
+void ConstVisitor::apply(const ResourceHints& value)
+{
+    apply(static_cast<const Object&>(value));
 }
 
 ////////////////////////////////////////////////////////////////////////////////

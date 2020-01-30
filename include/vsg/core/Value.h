@@ -43,6 +43,16 @@ namespace vsg
         explicit Value(const value_type& in_value) :
             _value(in_value) {}
 
+        template<typename... Args>
+        explicit Value(Args... args) :
+            _value(args...) {}
+
+        template<typename... Args>
+        static ref_ptr<Value> create(Args... args)
+        {
+            return ref_ptr<Value>(new Value(args...));
+        }
+
         std::size_t sizeofObject() const noexcept override { return sizeof(Value); }
 
         // implementation provided by Visitor.h
@@ -67,13 +77,18 @@ namespace vsg
         std::size_t valueCount() const override { return 1; }
 
         std::size_t dataSize() const override { return sizeof(value_type); }
+
         void* dataPointer() override { return &_value; }
         const void* dataPointer() const override { return &_value; }
+
+        void* dataPointer(size_t) override { return &_value; }
+        const void* dataPointer(size_t) const override { return &_value; }
+
         void* dataRelease() override { return nullptr; }
 
-        std::size_t width() const override { return 1; }
-        std::size_t height() const override { return 1; }
-        std::size_t depth() const override { return 1; }
+        std::uint32_t width() const override { return 1; }
+        std::uint32_t height() const override { return 1; }
+        std::uint32_t depth() const override { return 1; }
 
         Value& operator=(const Value& rhs)
         {
@@ -141,6 +156,14 @@ namespace vsg
     VSG_value(ubvec2Value, ubvec2);
     VSG_value(ubvec3Value, ubvec3);
     VSG_value(ubvec4Value, ubvec4);
+
+    VSG_value(usvec2Value, usvec2);
+    VSG_value(usvec3Value, usvec3);
+    VSG_value(usvec4Value, usvec4);
+
+    VSG_value(uivec2Value, uivec2);
+    VSG_value(uivec3Value, uivec3);
+    VSG_value(uivec4Value, uivec4);
 
     VSG_value(mat3Value, mat3);
     VSG_value(dmat3Value, dmat3);

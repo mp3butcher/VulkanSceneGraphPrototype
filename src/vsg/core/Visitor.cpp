@@ -10,6 +10,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/core/External.h>
 #include <vsg/core/Objects.h>
 #include <vsg/core/Visitor.h>
 
@@ -21,18 +22,20 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/nodes/LOD.h>
 #include <vsg/nodes/MatrixTransform.h>
 #include <vsg/nodes/Node.h>
+#include <vsg/nodes/PagedLOD.h>
 #include <vsg/nodes/QuadGroup.h>
 #include <vsg/nodes/StateGroup.h>
 #include <vsg/nodes/VertexIndexDraw.h>
 
+#include <vsg/vk/BindIndexBuffer.h>
+#include <vsg/vk/BindVertexBuffers.h>
 #include <vsg/vk/Command.h>
 #include <vsg/vk/CommandBuffer.h>
 #include <vsg/vk/ComputePipeline.h>
+#include <vsg/vk/Descriptor.h>
 #include <vsg/vk/DescriptorSet.h>
 #include <vsg/vk/GraphicsPipeline.h>
 #include <vsg/vk/RenderPass.h>
-#include <vsg/vk/BindVertexBuffers.h>
-#include <vsg/vk/BindIndexBuffer.h>
 
 #include <vsg/ui/ApplicationEvent.h>
 #include <vsg/ui/KeyEvent.h>
@@ -50,6 +53,11 @@ void Visitor::apply(Object&)
 }
 
 void Visitor::apply(Objects& value)
+{
+    apply(static_cast<Object&>(value));
+}
+
+void Visitor::apply(External& value)
 {
     apply(static_cast<Object&>(value));
 }
@@ -151,6 +159,14 @@ void Visitor::apply(dmat4Array& value)
 {
     apply(static_cast<Object&>(value));
 }
+void Visitor::apply(block64Array& value)
+{
+    apply(static_cast<Object&>(value));
+}
+void Visitor::apply(block128Array& value)
+{
+    apply(static_cast<Object&>(value));
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -209,6 +225,14 @@ void Visitor::apply(ubvec3Array2D& value)
     apply(static_cast<Object&>(value));
 }
 void Visitor::apply(ubvec4Array2D& value)
+{
+    apply(static_cast<Object&>(value));
+}
+void Visitor::apply(block64Array2D& value)
+{
+    apply(static_cast<Object&>(value));
+}
+void Visitor::apply(block128Array2D& value)
 {
     apply(static_cast<Object&>(value));
 }
@@ -273,6 +297,14 @@ void Visitor::apply(ubvec4Array3D& value)
 {
     apply(static_cast<Object&>(value));
 }
+void Visitor::apply(block64Array3D& value)
+{
+    apply(static_cast<Object&>(value));
+}
+void Visitor::apply(block128Array3D& value)
+{
+    apply(static_cast<Object&>(value));
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -295,6 +327,10 @@ void Visitor::apply(QuadGroup& value)
     apply(static_cast<Node&>(value));
 }
 void Visitor::apply(LOD& value)
+{
+    apply(static_cast<Node&>(value));
+}
+void Visitor::apply(PagedLOD& value)
 {
     apply(static_cast<Node&>(value));
 }
@@ -331,6 +367,10 @@ void Visitor::apply(Command& value)
 {
     apply(static_cast<Node&>(value));
 }
+void Visitor::apply(StateCommand& value)
+{
+    apply(static_cast<Command&>(value));
+}
 void Visitor::apply(CommandBuffer& value)
 {
     apply(static_cast<Object&>(value));
@@ -341,11 +381,15 @@ void Visitor::apply(RenderPass& value)
 }
 void Visitor::apply(BindDescriptorSet& value)
 {
-    apply(static_cast<Command&>(value));
+    apply(static_cast<StateCommand&>(value));
 }
 void Visitor::apply(BindDescriptorSets& value)
 {
-    apply(static_cast<Command&>(value));
+    apply(static_cast<StateCommand&>(value));
+}
+void Visitor::apply(Descriptor& value)
+{
+    apply(static_cast<Object&>(value));
 }
 void Visitor::apply(DescriptorSet& value)
 {
@@ -361,11 +405,11 @@ void Visitor::apply(BindIndexBuffer& value)
 }
 void Visitor::apply(BindComputePipeline& value)
 {
-    apply(static_cast<Object&>(value));
+    apply(static_cast<StateCommand&>(value));
 }
 void Visitor::apply(BindGraphicsPipeline& value)
 {
-    apply(static_cast<Object&>(value));
+    apply(static_cast<StateCommand&>(value));
 }
 void Visitor::apply(GraphicsPipeline& value)
 {
@@ -379,9 +423,9 @@ void Visitor::apply(GraphicsPipelineState& value)
 {
     apply(static_cast<Object&>(value));
 }
-void Visitor::apply(ShaderStages& value)
+void Visitor::apply(ShaderStage& value)
 {
-    apply(static_cast<GraphicsPipelineState&>(value));
+    apply(static_cast<Object&>(value));
 }
 void Visitor::apply(VertexInputState& value)
 {
@@ -410,6 +454,10 @@ void Visitor::apply(DepthStencilState& value)
 void Visitor::apply(ColorBlendState& value)
 {
     apply(static_cast<GraphicsPipelineState&>(value));
+}
+void Visitor::apply(ResourceHints& value)
+{
+    apply(static_cast<Object&>(value));
 }
 
 ////////////////////////////////////////////////////////////////////////////////

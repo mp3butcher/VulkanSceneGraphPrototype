@@ -10,7 +10,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/ui/ApplicationEvent.h>
 #include <vsg/viewer/Window.h>
+#include <vsg/vk/PipelineBarrier.h>
+#include <vsg/vk/SubmitCommands.h>
 
 #include <array>
 #include <chrono>
@@ -25,6 +28,8 @@ Window::Window(vsg::ref_ptr<vsg::Window::Traits> traits, vsg::AllocationCallback
 {
     // create the vkInstance
     vsg::Names instanceExtensions = getInstanceExtensions();
+
+    instanceExtensions.insert(instanceExtensions.end(), traits->instanceExtensionNames.begin(), traits->instanceExtensionNames.end());
 
     vsg::Names requestedLayers;
     if (traits && traits->debugLayer)
@@ -82,18 +87,29 @@ void Window::initaliseDevice()
     vsg::Names deviceExtensions;
     deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
+    deviceExtensions.insert(deviceExtensions.end(), _traits->deviceExtensionNames.begin(), _traits->deviceExtensionNames.end());
+
     // set up device
-    vsg::ref_ptr<vsg::PhysicalDevice> physicalDevice = vsg::PhysicalDevice::create(_instance, VK_QUEUE_GRAPHICS_BIT, _surface);
+    vsg::ref_ptr<vsg::PhysicalDevice> physicalDevice = vsg::PhysicalDevice::create(_instance);
+    physicalDevice->setPreferredQueueFlags(VK_QUEUE_GRAPHICS_BIT);
+    physicalDevice->setSurface(_surface);
     if (!physicalDevice) throw Result("Error: vsg::Window::create(...) failed to create Window, no Vulkan PhysicalDevice supported.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
 
-    vsg::ref_ptr<vsg::Device> device = vsg::Device::create(physicalDevice.get(), validatedNames, deviceExtensions, _traits->allocator);
-    if (!device) throw Result("Error: vsg::Window::create(...) failed to create Window, unable to create Vulkan logical Device.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
+    vsg::ref_ptr<vsg::Device> device = vsg::Device::create(physicalDevice.get(), _traits->allocator);
+    device->setValidationLayers(validatedNames);
+    device->setDeviceExtensions(deviceExtensions);
+       physicalDevice->vkDirty();
+       device->vkUpdate();
+    if (!*device) throw Result("Error: vsg::Window::create(...) failed to create Window, unable to create Vulkan logical Device.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
 
     // set up renderpass with the imageFormat that the swap chain will use
     vsg::SwapChainSupportDetails supportDetails = vsg::querySwapChainSupport(*physicalDevice, *_surface);
     VkSurfaceFormatKHR imageFormat = vsg::selectSwapSurfaceFormat(supportDetails);
     VkFormat depthFormat = VK_FORMAT_D24_UNORM_S8_UINT; //VK_FORMAT_D32_SFLOAT; // VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_SFLOAT_S8_UINT
-    vsg::ref_ptr<vsg::RenderPass> renderPass = vsg::RenderPass::create(device, imageFormat.format, depthFormat, _traits->allocator);
+    vsg::ref_ptr<vsg::RenderPass> renderPass = vsg::RenderPass::create(device, _traits->allocator);
+    renderPass->setColorFormat(imageFormat.format);
+    renderPass->setDepthFormat(depthFormat);
+renderPass->vkUpdate();
     if (!renderPass) throw Result("Error: vsg::Window::create(...) failed to create Window, unable to create Vulkan RenderPass.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
 
     _physicalDevice = physicalDevice;
@@ -103,11 +119,6 @@ void Window::initaliseDevice()
 
 void Window::buildSwapchain(uint32_t width, uint32_t height)
 {
-    if (!_imageAvailableSemaphore)
-    {
-        _imageAvailableSemaphore = vsg::Semaphore::create(_device);
-    }
-
     if (_swapchain)
     {
         // make sure all operations on the device have stopped before we go deleting associated resources
@@ -147,6 +158,7 @@ void Window::buildSwapchain(uint32_t width, uint32_t height)
     depthImageCreateInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     depthImageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     depthImageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    depthImageCreateInfo.pNext = nullptr;
 
     _depthImage = Image::create(_device, depthImageCreateInfo);
     _depthImageMemory = DeviceMemory::create(_device, _depthImage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -174,28 +186,35 @@ void Window::buildSwapchain(uint32_t width, uint32_t height)
         ref_ptr<Semaphore> ias = vsg::Semaphore::create(_device);
         ref_ptr<Framebuffer> fb = Framebuffer::create(_device, framebufferInfo);
         ref_ptr<CommandPool> cp = CommandPool::create(_device, _physicalDevice->getGraphicsFamily());
+#if 0
+        ref_ptr<CommandBuffer> cb = CommandBuffer::create(_device, cp, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+#else
         ref_ptr<CommandBuffer> cb = CommandBuffer::create(_device, cp, VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
+#endif
         ref_ptr<Fence> fence = Fence::create(_device);
 
         _frames.push_back({ias, imageViews[i], fb, cp, cb, false, fence});
     }
 
-    dispatchCommandsToQueue(_device, _frames[0].commandPool, _device->getQueue(_physicalDevice->getGraphicsFamily()), [&](VkCommandBuffer commandBuffer) {
-        vsg::ImageMemoryBarrier depthImageMemoryBarrier(
+    submitCommandsToQueue(_device, _frames[0].commandPool, _device->getQueue(_physicalDevice->getGraphicsFamily()), [&](CommandBuffer& commandBuffer) {
+        auto depthImageBarrier = ImageMemoryBarrier::create(
             0, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-            _depthImage);
+            VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+            _depthImage,
+            VkImageSubresourceRange{VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, 0, 1, 0, 1});
 
-        depthImageMemoryBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+        auto pipelineBarrier = PipelineBarrier::create(
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+            0, depthImageBarrier);
 
-        depthImageMemoryBarrier.cmdPiplineBarrier(commandBuffer,
-                                                  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT);
+        pipelineBarrier->dispatch(commandBuffer);
     });
 
     _nextImageIndex = 0;
 }
 
-void Window::populateCommandBuffers(uint32_t index)
+void Window::populateCommandBuffers(uint32_t index, ref_ptr<vsg::FrameStamp> frameStamp)
 {
     Frame& frame = _frames[index];
 
@@ -203,10 +222,22 @@ void Window::populateCommandBuffers(uint32_t index)
     {
         if (frame.checkCommandsCompletedFence)
         {
-            while (frame.commandsCompletedFence->wait(1000000000) == VK_TIMEOUT)
+            uint64_t timeout = 10000000000;
+            VkResult result = VK_SUCCESS;
+            while ((result = frame.commandsCompletedFence->wait(timeout)) == VK_TIMEOUT)
             {
-                std::cout << "populateCommandBuffers(" << index << ") frame.commandsCompletedFence->wait(1000) failed with VK_TIMEOUT." << std::endl;
+                std::cout << "populateCommandBuffers(" << index << ") frame.commandsCompletedFence->wait(" << timeout << ") failed with result = " << result << std::endl;
+                //exit(1);
+                //throw "Window::populateCommandBuffers(uint32_t index, ref_ptr<vsg::FrameStamp> frameStamp) timeout";
             }
+
+            for (auto& semaphore : frame.commandsCompletedFence->dependentSemaphores())
+            {
+                //std::cout<<"Window::populateCommandBuffers(..) "<<*(semaphore->data())<<" "<<semaphore->numDependentSubmissions().load()<<std::endl;
+                semaphore->numDependentSubmissions().exchange(0);
+            }
+
+            frame.commandsCompletedFence->dependentSemaphores().clear();
         }
 
         frame.commandsCompletedFence->reset();
@@ -214,11 +245,11 @@ void Window::populateCommandBuffers(uint32_t index)
 
     for (auto& stage : _stages)
     {
-        stage->populateCommandBuffer(frame.commandBuffer, frame.framebuffer, _renderPass, _extent2D, _clearColor);
+        stage->populateCommandBuffer(frame.commandBuffer, frame.framebuffer, _renderPass, _extent2D, _clearColor, frameStamp);
     }
 }
 
-// just kept for backwards compat for now
+// just kept for backwards compatibility for now
 Window::Result Window::create(uint32_t width, uint32_t height, bool debugLayer, bool apiDumpLayer, vsg::Window* shareWindow, vsg::AllocationCallbacks* allocator)
 {
     vsg::ref_ptr<Window::Traits> traits(new Window::Traits());
@@ -231,7 +262,7 @@ Window::Result Window::create(uint32_t width, uint32_t height, bool debugLayer, 
     return create(traits);
 }
 
-// just kept for backwards compat for now
+// just kept for backwards compatibility for now
 Window::Result Window::create(vsg::ref_ptr<Traits> traits, bool debugLayer, bool apiDumpLayer, vsg::AllocationCallbacks* allocator)
 {
     traits->debugLayer = debugLayer;

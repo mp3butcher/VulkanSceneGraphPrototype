@@ -19,8 +19,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 namespace vsg
 {
-    // forward decalre Objects
+    // forward declare core Objects
     class Objects;
+    class External;
 
     // forward declare nodes classes
     class Node;
@@ -28,6 +29,7 @@ namespace vsg
     class Group;
     class QuadGroup;
     class LOD;
+    class PagedLOD;
     class StateGroup;
     class CullGroup;
     class CullNode;
@@ -37,10 +39,12 @@ namespace vsg
 
     // forward declare vulkan classes
     class Command;
+    class StateCommand;
     class CommandBuffer;
     class RenderPass;
     class BindDescriptorSet;
     class BindDescriptorSets;
+    class Descriptor;
     class DescriptorSet;
     class BindVertexBuffers;
     class BindIndexBuffer;
@@ -50,7 +54,7 @@ namespace vsg
     class ComputePipeline;
     class Draw;
     class DrawIndexed;
-    class ShaderStages;
+    class ShaderStage;
     class GraphicsPipelineState;
     class VertexInputState;
     class InputAssemblyState;
@@ -59,6 +63,7 @@ namespace vsg
     class MultisampleState;
     class DepthStencilState;
     class ColorBlendState;
+    class ResourceHints;
 
     // forward declare ui events classes
     class UIEvent;
@@ -90,6 +95,7 @@ namespace vsg
 
         virtual void apply(Object&);
         virtual void apply(Objects&);
+        virtual void apply(External&);
 
         // Values
         virtual void apply(stringValue&);
@@ -116,6 +122,8 @@ namespace vsg
         virtual void apply(ubvec4Array&);
         virtual void apply(mat4Array&);
         virtual void apply(dmat4Array&);
+        virtual void apply(block64Array&);
+        virtual void apply(block128Array&);
 
         // Array2Ds
         virtual void apply(ubyteArray2D&);
@@ -132,6 +140,8 @@ namespace vsg
         virtual void apply(ubvec2Array2D&);
         virtual void apply(ubvec3Array2D&);
         virtual void apply(ubvec4Array2D&);
+        virtual void apply(block64Array2D&);
+        virtual void apply(block128Array2D&);
 
         // Array3Ds
         virtual void apply(ubyteArray3D&);
@@ -148,6 +158,8 @@ namespace vsg
         virtual void apply(ubvec2Array3D&);
         virtual void apply(ubvec3Array3D&);
         virtual void apply(ubvec4Array3D&);
+        virtual void apply(block64Array3D&);
+        virtual void apply(block128Array3D&);
 
         // Nodes
         virtual void apply(Node&);
@@ -155,6 +167,7 @@ namespace vsg
         virtual void apply(Group&);
         virtual void apply(QuadGroup&);
         virtual void apply(LOD&);
+        virtual void apply(PagedLOD&);
         virtual void apply(StateGroup&);
         virtual void apply(CullGroup&);
         virtual void apply(CullNode&);
@@ -164,10 +177,12 @@ namespace vsg
 
         // Vulkan nodes
         virtual void apply(Command&);
+        virtual void apply(StateCommand&);
         virtual void apply(CommandBuffer&);
         virtual void apply(RenderPass&);
         virtual void apply(BindDescriptorSet&);
         virtual void apply(BindDescriptorSets&);
+        virtual void apply(Descriptor&);
         virtual void apply(DescriptorSet&);
         virtual void apply(BindVertexBuffers&);
         virtual void apply(BindIndexBuffer&);
@@ -176,7 +191,7 @@ namespace vsg
         virtual void apply(GraphicsPipeline&);
         virtual void apply(ComputePipeline&);
         virtual void apply(GraphicsPipelineState&);
-        virtual void apply(ShaderStages&);
+        virtual void apply(ShaderStage&);
         virtual void apply(VertexInputState&);
         virtual void apply(InputAssemblyState&);
         virtual void apply(ViewportState&);
@@ -184,6 +199,7 @@ namespace vsg
         virtual void apply(MultisampleState&);
         virtual void apply(DepthStencilState&);
         virtual void apply(ColorBlendState&);
+        virtual void apply(ResourceHints&);
 
         // ui events
         virtual void apply(UIEvent&);

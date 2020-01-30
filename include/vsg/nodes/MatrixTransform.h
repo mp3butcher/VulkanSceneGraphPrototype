@@ -17,43 +17,25 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace vsg
 {
 
-#define USE_MATRIX_DOUBLE 0
-#define USE_MATRIX_VALUE 0
-
     class MatrixTransform : public Inherit<Group, MatrixTransform>
     {
     public:
-
-#if USE_MATRIX_DOUBLE
-        using value_type = double;
-#else
-        using value_type = float;
-#endif
-        using Matrix = t_mat4<value_type>;
-        using MatrixValue = Value<Matrix>;
-
         MatrixTransform(Allocator* allocator = nullptr);
-        MatrixTransform(const Matrix& matrix, Allocator* allocator = nullptr);
+        MatrixTransform(const dmat4& matrix, Allocator* allocator = nullptr);
 
         void read(Input& input) override;
         void write(Output& output) const override;
 
-#if USE_MATRIX_VALUE
-        void setMatrix(const Matrix& matrix) { (*_matrix) = matrix; }
-        Matrix& getMatrix() { return _matrix->value(); }
-        const Matrix& getMatrix() const { return _matrix->value(); }
-#else
-        void setMatrix(const Matrix& matrix) { _matrix = matrix; }
-        Matrix& getMatrix() { return _matrix; }
-        const Matrix& getMatrix() const { return _matrix; }
-#endif
+        void setMatrix(const dmat4& matrix) { _matrix = matrix; }
+        dmat4& getMatrix() { return _matrix; }
+        const dmat4& getMatrix() const { return _matrix; }
+
+        void setSubgraphRequiresLocalFrustum(bool flag) { _subgraphRequiresLocalFrustum = flag; }
+        bool getSubgraphRequiresLocalFrustum() const { return _subgraphRequiresLocalFrustum; }
 
     protected:
-#if USE_MATRIX_VALUE
-        ref_ptr<MatrixValue> _matrix;
-#else
-        Matrix _matrix;
-#endif
+        dmat4 _matrix;
+        bool _subgraphRequiresLocalFrustum;
     };
     VSG_type_name(vsg::MatrixTransform);
 

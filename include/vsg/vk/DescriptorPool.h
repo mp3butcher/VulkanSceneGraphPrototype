@@ -12,6 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <mutex>
 #include <vsg/vk/Device.h>
 
 namespace vsg
@@ -33,11 +34,14 @@ namespace vsg
         Device* getDevice() { return _device; }
         const Device* getDevice() const { return _device; }
 
+        std::mutex& getMutex() const { return _mutex; }
+
     protected:
         virtual ~DescriptorPool();
 
         VkDescriptorPool _descriptorPool;
         ref_ptr<Device> _device;
         ref_ptr<AllocationCallbacks> _allocator;
+        mutable std::mutex _mutex;
     };
 } // namespace vsg

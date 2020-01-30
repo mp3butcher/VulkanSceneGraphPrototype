@@ -19,10 +19,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/traversals/CompileTraversal.h>
 
+#include <algorithm>
+
 namespace vsg
 {
     // forward declare
-    class State;
     class CommandBuffer;
 
     class VSG_DECLSPEC StateGroup : public Inherit<Group, StateGroup>
@@ -38,23 +39,23 @@ namespace vsg
         StateCommands& getStateCommands() { return _stateCommands; }
         const StateCommands& getStateCommands() const { return _stateCommands; }
 
+        template<class T>
+        bool contains(const T value) const
+        {
+            return std::find(_stateCommands.begin(), _stateCommands.end(), value) != _stateCommands.end();
+        }
+
         void add(ref_ptr<StateCommand> stateCommand)
         {
             _stateCommands.push_back(stateCommand);
         }
 
-        inline void pushTo(State& state) const
+        template<class T>
+        void remove(const T value)
         {
-            for (auto& stateCommand : _stateCommands)
+            if (auto itr = std::find(_stateCommands.begin(), _stateCommands.end(), value); itr != _stateCommands.end())
             {
-                stateCommand->pushTo(state);
-            }
-        }
-        inline void popFrom(State& state) const
-        {
-            for (auto& stateCommand : _stateCommands)
-            {
-                stateCommand->popFrom(state);
+                _stateCommands.erase(itr);
             }
         }
 

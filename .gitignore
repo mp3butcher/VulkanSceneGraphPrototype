@@ -1,5 +1,4 @@
 
-cmake_uninstall.cmake
 
 lib/
 bin/
@@ -17,6 +16,8 @@ html
 
 *.pc
 *.conf
+*.backup
+cmake_uninstall.cmake
 CMakeCache.txt
 CMakeFiles
 CMakeScripts
@@ -53,3 +54,17 @@ install_manifest.txt
 *.exe
 *.out
 *.app
+
+# Visual Studio files
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+.vs/
+x64/
+src/vsg/vsg.dir/
+
+#xcode
+DerivedData/
+*.build
+*.xcodeproj

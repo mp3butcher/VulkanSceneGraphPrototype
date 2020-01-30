@@ -19,12 +19,37 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace vsg
 {
     class CommandBuffer;
+    class Context;
 
     class Command : public Inherit<Node, Command>
     {
     public:
-        Command() {}
+        Command(Allocator* allocator = nullptr) :
+            Inherit(allocator) {}
+
+        virtual void compile(Context& /*context*/) {}
 
         virtual void dispatch(CommandBuffer& commandBuffer) const = 0;
     };
+
+    class StateCommand : public Inherit<Command, StateCommand>
+    {
+    public:
+        StateCommand(uint32_t slot = 0, Allocator* allocator = nullptr) :
+            Inherit(allocator),
+            _slot(slot) {}
+
+        void read(Input& input) override;
+        void write(Output& output) const override;
+
+        void setSlot(uint32_t slot) { _slot = slot; }
+        uint32_t getSlot() const { return _slot; }
+
+    protected:
+        virtual ~StateCommand() {}
+
+        uint32_t _slot;
+    };
+    VSG_type_name(vsg::StateCommand);
+
 } // namespace vsg

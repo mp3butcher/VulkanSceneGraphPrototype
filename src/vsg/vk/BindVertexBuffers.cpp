@@ -11,23 +11,74 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/vk/BindVertexBuffers.h>
-#include <vsg/vk/State.h>
+#include <vsg/vk/CommandBuffer.h>
+
+#include <vsg/traversals/CompileTraversal.h>
 
 using namespace vsg;
 
-void BindVertexBuffers::pushTo(State& state) const
+BindVertexBuffers::~BindVertexBuffers()
 {
-    state.dirty = true;
-    state.vertexBuffersStack.push(this);
+    size_t numBufferEntries = std::min(_buffers.size(), _offsets.size());
+    for (size_t i = 0; i < numBufferEntries; ++i)
+    {
+        if (_buffers[i])
+        {
+            _buffers[i]->release(_offsets[i], 0); // TODO
+        }
+    }
 }
 
-void BindVertexBuffers::popFrom(State& state) const
+void BindVertexBuffers::read(Input& input)
 {
-    state.dirty = true;
-    state.vertexBuffersStack.pop();
+    Command::read(input);
+
+    // clear Vulkan objects
+    _buffers.clear();
+    _vkBuffers.clear();
+    _offsets.clear();
+
+    // read vertex arrays
+    _arrays.resize(input.readValue<uint32_t>("NumArrays"));
+    for (auto& array : _arrays)
+    {
+        array = input.readObject<Data>("Array");
+    }
+}
+
+void BindVertexBuffers::write(Output& output) const
+{
+    Command::write(output);
+
+    output.writeValue<uint32_t>("NumArrays", _arrays.size());
+    for (auto& array : _arrays)
+    {
+        output.writeObject("Array", array.get());
+    }
 }
 
 void BindVertexBuffers::dispatch(CommandBuffer& commandBuffer) const
 {
-    vkCmdBindVertexBuffers(commandBuffer, _firstBinding, _buffers.size(), _vkBuffers.data(), _offsets.data());
+    vkCmdBindVertexBuffers(commandBuffer, _firstBinding, static_cast<uint32_t>(_buffers.size()), _vkBuffers.data(), _offsets.data());
+}
+
+void BindVertexBuffers::compile(Context& context)
+{
+    // nothing to compile
+    if (_arrays.empty()) return;
+
+    // already compiled
+    if (_buffers.size() == _arrays.size()) return;
+
+    _buffers.clear();
+    _vkBuffers.clear();
+    _offsets.clear();
+
+    auto bufferDataList = vsg::createBufferAndTransferData(context, _arrays, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_SHARING_MODE_EXCLUSIVE);
+    for (auto& bufferData : bufferDataList)
+    {
+        _buffers.push_back(bufferData._buffer);
+        _vkBuffers.push_back(*(bufferData._buffer));
+        _offsets.push_back(bufferData._offset);
+    }
 }

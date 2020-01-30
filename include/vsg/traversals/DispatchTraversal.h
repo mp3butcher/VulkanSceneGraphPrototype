@@ -14,6 +14,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <memory>
 #include <vsg/core/Object.h>
+#include <vsg/maths/mat4.h>
 
 namespace vsg
 {
@@ -23,29 +24,48 @@ namespace vsg
     class Group;
     class QuadGroup;
     class LOD;
+    class PagedLOD;
     class StateGroup;
+    class CullGroup;
+    class CullNode;
+    class MatrixTransform;
     class Command;
+    class Commands;
     class CommandBuffer;
+    class State;
+    class DatabasePager;
+    class FrameStamp;
+    class CulledPagedLODs;
 
     class VSG_DECLSPEC DispatchTraversal : public Object
     {
     public:
-        explicit DispatchTraversal(CommandBuffer* commandBuffer = nullptr);
+        explicit DispatchTraversal(CommandBuffer* commandBuffer = nullptr, uint32_t maxSlot = 2, ref_ptr<FrameStamp> fs = {});
         ~DispatchTraversal();
+
+        void setProjectionAndViewMatrix(const dmat4& projMatrix, const dmat4& viewMatrix);
 
         void apply(const Object& object);
 
         // scene graph nodes
-        void apply(const Group& object);
-        void apply(const QuadGroup& object);
-        void apply(const LOD& object);
+        void apply(const Group& group);
+        void apply(const QuadGroup& quadGrouo);
+        void apply(const LOD& lod);
+        void apply(const PagedLOD& pagedLOD);
+        void apply(const CullGroup& cullGroup);
+        void apply(const CullNode& cullNode);
 
         // Vulkan nodes
+        void apply(const MatrixTransform& mt);
         void apply(const StateGroup& object);
+        void apply(const Commands& commands);
         void apply(const Command& command);
 
-    protected:
-        class Data;
-        Data* _data;
+        // used to handle loading of PagedLOD external children.
+        ref_ptr<DatabasePager> databasePager;
+        ref_ptr<CulledPagedLODs> culledPagedLODs;
+
+        ref_ptr<FrameStamp> frameStamp;
+        ref_ptr<State> state;
     };
 } // namespace vsg

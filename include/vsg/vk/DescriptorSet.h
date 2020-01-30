@@ -12,7 +12,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/nodes/StateGroup.h>
+#include <vsg/vk/Command.h>
 #include <vsg/vk/Descriptor.h>
 #include <vsg/vk/DescriptorPool.h>
 #include <vsg/vk/DescriptorSetLayout.h>
@@ -24,51 +24,118 @@ namespace vsg
     class VSG_DECLSPEC DescriptorSet : public Inherit<Object, DescriptorSet>
     {
     public:
-        DescriptorSet(VkDescriptorSet descriptorSet, Device* device, DescriptorPool* descriptorPool, DescriptorSetLayout* descriptorSetLayout, const Descriptors& descriptors);
+        DescriptorSet();
+        DescriptorSet(const DescriptorSetLayouts& descriptorSetLayouts, const Descriptors& descriptors);
 
-        using Result = vsg::Result<DescriptorSet, VkResult, VK_SUCCESS>;
+        template<class N, class V>
+        static void t_traverse(N& ds, V& visitor)
+        {
+            for (auto& dsl : ds._descriptorSetLayouts) dsl->accept(visitor);
+            for (auto& descriptor : ds._descriptors) descriptor->accept(visitor);
+        }
 
-        static Result create(Device* device, DescriptorPool* descriptorPool, DescriptorSetLayout* descriptorSetLayout, const Descriptors& descriptors);
+        void traverse(Visitor& visitor) override { t_traverse(*this, visitor); }
+        void traverse(ConstVisitor& visitor) const override { t_traverse(*this, visitor); }
 
-        void assign(const Descriptors& descriptors);
+        void read(Input& input) override;
+        void write(Output& output) const override;
 
-        operator VkDescriptorSet() const { return _descriptorSet; }
+        const DescriptorSetLayouts& getDescriptorSetLayouts() const { return _descriptorSetLayouts; }
+        const Descriptors& getDescriptors() const { return _descriptors; }
+
+        class VSG_DECLSPEC Implementation : public Inherit<Object, Implementation>
+        {
+        public:
+            Implementation(VkDescriptorSet descriptorSet, Device* device, DescriptorPool* descriptorPool, const DescriptorSetLayouts& descriptorSetLayouts, const Descriptors& descriptors);
+
+            using Result = vsg::Result<Implementation, VkResult, VK_SUCCESS>;
+
+            static Result create(Device* device, DescriptorPool* descriptorPool, const DescriptorSetLayouts& descriptorSetLayouts, const Descriptors& descriptors);
+
+            void assign(const Descriptors& descriptors);
+
+            operator VkDescriptorSet() const { return _descriptorSet; }
+
+        protected:
+            virtual ~Implementation();
+
+            VkDescriptorSet _descriptorSet;
+            ref_ptr<Device> _device;
+            ref_ptr<DescriptorPool> _descriptorPool;
+            DescriptorSetLayouts _descriptorSetLayouts;
+            Descriptors _descriptors;
+        };
+
+        // compile the Vulkan object, context parameter used for Device
+        void compile(Context& context);
+
+        // remove the local reference to the Vulkan implementation
+        void release() { _implementation = nullptr; }
+
+        operator VkDescriptorSet() const { return *_implementation; }
+
+        Implementation* implementation() { return _implementation; }
+        const Implementation* implementation() const { return _implementation; }
 
     protected:
         virtual ~DescriptorSet();
 
-        VkDescriptorSet _descriptorSet;
-        ref_ptr<Device> _device;
-        ref_ptr<DescriptorPool> _descriptorPool;
-        ref_ptr<DescriptorSetLayout> _descriptorSetLayout;
+        DescriptorSetLayouts _descriptorSetLayouts;
         Descriptors _descriptors;
+
+        ref_ptr<Implementation> _implementation;
     };
+    VSG_type_name(vsg::DescriptorSet);
 
     using DescriptorSets = std::vector<ref_ptr<DescriptorSet>>;
 
-    class VSG_DECLSPEC BindDescriptorSets : public Inherit<StateComponent, BindDescriptorSets>
+    class VSG_DECLSPEC BindDescriptorSets : public Inherit<StateCommand, BindDescriptorSets>
     {
     public:
-        BindDescriptorSets(VkPipelineBindPoint bindPoint, PipelineLayout* pipelineLayout, const DescriptorSets& descriptorSets) :
+        BindDescriptorSets();
+
+        BindDescriptorSets(VkPipelineBindPoint bindPoint, PipelineLayout* pipelineLayout, uint32_t firstSet, const DescriptorSets& descriptorSets) :
+            Inherit(1), // slot 1
             _bindPoint(bindPoint),
+            _firstSet(firstSet),
+            _vkPipelineLayout(0),
             _pipelineLayout(pipelineLayout),
             _descriptorSets(descriptorSets)
         {
-            update();
         }
 
-        void pushTo(State& state) const override;
-        void popFrom(State& state) const override;
+        BindDescriptorSets(VkPipelineBindPoint bindPoint, PipelineLayout* pipelineLayout, const DescriptorSets& descriptorSets) :
+            Inherit(1), // slot 1
+            _bindPoint(bindPoint),
+            _firstSet(0),
+            _vkPipelineLayout(0),
+            _pipelineLayout(pipelineLayout),
+            _descriptorSets(descriptorSets)
+        {
+        }
+
+        template<class N, class V>
+        static void t_traverse(N& bds, V& visitor)
+        {
+            if (bds._pipelineLayout) bds._pipelineLayout->accept(visitor);
+            for (auto& ds : bds._descriptorSets) ds->accept(visitor);
+        }
+
+        void traverse(Visitor& visitor) override { t_traverse(*this, visitor); }
+        void traverse(ConstVisitor& visitor) const override { t_traverse(*this, visitor); }
+
+        void read(Input& input) override;
+        void write(Output& output) const override;
+
+        VkPipelineBindPoint getBindPoint() { return _bindPoint; }
+        const PipelineLayout* getPipelineLayout() const { return _pipelineLayout; }
+        uint32_t getFirstSet() { return _firstSet; }
+        const DescriptorSets& getDescriptorSets() const { return _descriptorSets; }
+
         void dispatch(CommandBuffer& commandBuffer) const override;
 
-        void update()
-        {
-            _vkDescriptorSets.resize(_descriptorSets.size());
-            for (size_t i = 0; i < _descriptorSets.size(); ++i)
-            {
-                _vkDescriptorSets[i] = *(_descriptorSets[i]);
-            }
-        }
+        // compile the Vulkan object, context parameter used for Device
+        void compile(Context& context) override;
 
     protected:
         virtual ~BindDescriptorSets() {}
@@ -76,9 +143,78 @@ namespace vsg
         using VkDescriptorSets = std::vector<VkDescriptorSet>;
 
         VkPipelineBindPoint _bindPoint;
+        uint32_t _firstSet;
+        VkPipelineLayout _vkPipelineLayout;
+        VkDescriptorSets _vkDescriptorSets;
+
+        // settings
         ref_ptr<PipelineLayout> _pipelineLayout;
         DescriptorSets _descriptorSets;
-        VkDescriptorSets _vkDescriptorSets;
     };
+    VSG_type_name(vsg::BindDescriptorSets);
+
+    class VSG_DECLSPEC BindDescriptorSet : public Inherit<StateCommand, BindDescriptorSet>
+    {
+    public:
+        BindDescriptorSet();
+
+        BindDescriptorSet(VkPipelineBindPoint bindPoint, PipelineLayout* pipelineLayout, uint32_t firstSet, DescriptorSet* descriptorSet) :
+            Inherit(1), // slot 1
+            _bindPoint(bindPoint),
+            _firstSet(firstSet),
+            _vkPipelineLayout(0),
+            _vkDescriptorSet(0),
+            _pipelineLayout(pipelineLayout),
+            _descriptorSet(descriptorSet)
+        {
+        }
+
+        BindDescriptorSet(VkPipelineBindPoint bindPoint, PipelineLayout* pipelineLayout, DescriptorSet* descriptorSet) :
+            Inherit(1), // slot 1
+            _bindPoint(bindPoint),
+            _firstSet(0),
+            _vkPipelineLayout(0),
+            _vkDescriptorSet(0),
+            _pipelineLayout(pipelineLayout),
+            _descriptorSet(descriptorSet)
+        {
+        }
+
+        template<class N, class V>
+        static void t_traverse(N& bds, V& visitor)
+        {
+            if (bds._pipelineLayout) bds._pipelineLayout->accept(visitor);
+            if (bds._descriptorSet) bds._descriptorSet->accept(visitor);
+        }
+
+        void traverse(Visitor& visitor) override { t_traverse(*this, visitor); }
+        void traverse(ConstVisitor& visitor) const override { t_traverse(*this, visitor); }
+
+        void read(Input& input) override;
+        void write(Output& output) const override;
+
+        VkPipelineBindPoint getBindPoint() { return _bindPoint; }
+        const PipelineLayout* getPipelineLayout() const { return _pipelineLayout; }
+        uint32_t getFirstSet() { return _firstSet; }
+        const DescriptorSet* getDescriptorSet() const { return _descriptorSet; }
+
+        void dispatch(CommandBuffer& commandBuffer) const override;
+
+        // compile the Vulkan object, context parameter used for Device
+        void compile(Context& context) override;
+
+    protected:
+        virtual ~BindDescriptorSet() {}
+
+        VkPipelineBindPoint _bindPoint;
+        uint32_t _firstSet;
+        VkPipelineLayout _vkPipelineLayout;
+        VkDescriptorSet _vkDescriptorSet;
+
+        // settings
+        ref_ptr<PipelineLayout> _pipelineLayout;
+        ref_ptr<DescriptorSet> _descriptorSet;
+    };
+    VSG_type_name(vsg::BindDescriptorSet);
 
 } // namespace vsg

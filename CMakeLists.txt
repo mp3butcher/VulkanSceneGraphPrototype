@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.7)
 
-project(VulkanSceneGraphPrototype)
-
-set(VSG_MAJOR_VERSION 0)
-set(VSG_MINOR_VERSION 0)
-set(VSG_PATCH_VERSION 0)
+project(VSG
+    VERSION 0.0.0
+    DESCRIPTION "Vulkan/VkSceneGraph Prototype library"
+    LANGUAGES CXX
+)
 set(VSG_SOVERSION 0)
 
 # create the version header
@@ -43,21 +43,34 @@ if(NOT CMAKE_BUILD_TYPE)
 endif(NOT CMAKE_BUILD_TYPE)
 
 if(CMAKE_COMPILER_IS_GNUCXX)
-    set(VSG_WARNING_FLAGS -Wall -Wparentheses -Wno-long-long -Wno-import -Wreturn-type -Wmissing-braces -Wunknown-pragmas -Wmaybe-uninitialized -Wshadow -Wunused -Wno-misleading-indentation -Wextra -pedantic)
+    set(VSG_WARNING_FLAGS -Wall -Wparentheses -Wno-long-long -Wno-import -Wreturn-type -Wmissing-braces -Wunknown-pragmas -Wmaybe-uninitialized -Wshadow -Wunused -Wno-misleading-indentation -Wextra)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(VSG_WARNING_FLAGS -Wall -Wparentheses -Wno-long-long -Wno-import -Wreturn-type -Wmissing-braces -Wunknown-pragmas -Wshadow -Wunused -Wextra)
 endif()
 
 set(VSG_WARNING_FLAGS ${VSG_WARNING_FLAGS} CACHE STRING "Compiler flags to use." FORCE)
+add_compile_options(${VSG_WARNING_FLAGS})
 
 
-foreach (flag ${VSG_WARNING_FLAGS})
-    if(NOT CMAKE_CXX_FLAGS MATCHES "${flag}")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flag}")
-    endif()
-endforeach ()
-
-
-find_package(glfw3)
 find_package(Vulkan)
+find_package(Threads)
+
+if (ANDROID)
+    find_library(AndroidLib android)
+    if(CMAKE_SYSTEM_VERSION GREATER 24)
+        find_library(AndroidNativeWindowLib nativewindow)
+    endif()
+elseif (WIN32)
+    # just use native windowing
+elseif (APPLE)
+    find_library(COCOA_LIBRARY Cocoa)
+    find_library(QUARTZCORE_LIBRARY QuartzCore)
+else()
+    # just use Xcb for native windowing
+    find_package(PkgConfig)
+    pkg_check_modules(xcb REQUIRED IMPORTED_TARGET xcb)
+endif()
+
 
 
 # create doxygen build target
@@ -83,6 +96,11 @@ add_custom_target(build_all_h
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/build/build_all_h.cmake
 )
 
+# automatically buil_all_h build target to generate the include/vsg/all.h from the headers in the include/vsg/* directories
+add_custom_target(uninstall
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/build/uninstall.cmake
+)
+
 # add cppcheck build target to provide static analysis of codebase
 find_program(CPPCHECK cppcheck)
 if (CPPCHECK)
@@ -91,11 +109,16 @@ if (CPPCHECK)
         set(PATH_TO_SOURCE "${PATH_TO_SOURCE}/")
     endif()
 
+    include(ProcessorCount)
+    ProcessorCount(CPU_CORES)
+
     set(CPPCHECK_SUPPRESION_LIST_FILE "${CMAKE_SOURCE_DIR}/build/cppcheck-suppression-list.txt")
     set(CPPCHECK_SUPPRESION_LIST "--suppressions-list=${CPPCHECK_SUPPRESION_LIST_FILE}")
     set(CPPCHECK_EXTRA_OPTIONS "" CACHE STRING "additional commndline options to use when invoking cppcheck")
     add_custom_target(cppcheck
-        COMMAND ${CPPCHECK} --quiet --enable=style --language=c++  ${CPPCHECK_EXTRA_OPTIONS} ${CPPCHECK_SUPPRESION_LIST} ${PATH_TO_SOURCE}include/vsg/*/*.h ${PATH_TO_SOURCE}src/vsg/*/*.cpp -I ${PATH_TO_SOURCE}include/
+        COMMAND ${CPPCHECK} -j ${CPU_CORES} --quiet --enable=style --language=c++ ${CPPCHECK_EXTRA_OPTIONS} ${CPPCHECK_SUPPRESION_LIST} ${PATH_TO_SOURCE}include/vsg/*/*.h ${PATH_TO_SOURCE}src/vsg/*/*.cpp -I ${PATH_TO_SOURCE}include/
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Static code analsysi using cppcheck"
     )
 endif()
 
@@ -104,6 +127,8 @@ find_program(CLANGFORMAT clang-format)
 if (CLANGFORMAT)
     add_custom_target(clang-format
         COMMAND ${CLANGFORMAT} -i ${PATH_TO_SOURCE}include/vsg/*/*.h ${PATH_TO_SOURCE}src/vsg/*/*.cpp
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Automated code format using clang-format"
     )
 endif()
 

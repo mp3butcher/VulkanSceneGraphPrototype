@@ -14,6 +14,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/vk/PhysicalDevice.h>
+#include <vsg/vk/Queue.h>
+
+#include <list>
 
 namespace vsg
 {
@@ -53,8 +56,9 @@ namespace vsg
         operator VkDevice() const { return _device; }
         VkDevice getDevice() const { return _device; }
         // Queue * getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex=0);
-        VkQueue getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex = 0);
+       // VkQueue getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex = 0);
 
+        ref_ptr<Queue> getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex = 0);
     protected:
         virtual ~Device();
         virtual bool vkCreate();
@@ -69,11 +73,13 @@ namespace vsg
 
         vsg::ref_ptr<PhysicalDevice> _physicalDevice;
         vsg::ref_ptr<AllocationCallbacks> _allocator;
+
+
         ///managed
         VkDevice _device;
         using QueueVec =std::vector<vsg::ref_ptr<Queue> > ;
-        std::vector<QueueVec> _perfamilyQueueVector;
-
+        std::vector<QueueVec> _perfamilyQueueVector; QueueVec _queues;
+// std::list<ref_ptr<Queue>> _queues;
     };
     class VSG_DECLSPEC Queue : public Inherit<vkObjectProxy, Queue>
     {
@@ -92,10 +98,20 @@ namespace vsg
         inline void setIndex(const uint32_t &f) {if(_queueIndex==f)return; _queueIndex=f; vkDirty();}
 
         operator VkQueue(){return _queue;}
+
+
+        VkResult submit(const std::vector<VkSubmitInfo>& submitInfos, Fence* fence = nullptr);
+
+        VkResult submit(const VkSubmitInfo& submitInfo, Fence* fence = nullptr);
+
+        VkResult present(const VkPresentInfoKHR& info);
+
+        VkResult waitIdle();
     protected:
         ref_ptr<Device> _device;
         uint32_t _queueFamilyIndex, _queueIndex;
         VkQueue _queue;
+        std::mutex _mutex;
 };
 
 } // namespace vsg

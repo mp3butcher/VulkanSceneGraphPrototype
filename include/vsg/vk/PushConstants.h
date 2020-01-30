@@ -19,7 +19,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace vsg
 {
 
-    class VSG_DECLSPEC PushConstants : public Inherit<StateComponent, PushConstants>
+    class VSG_DECLSPEC PushConstants : public Inherit<StateCommand, PushConstants>
     {
     public:
         PushConstants(VkShaderStageFlags shaderFlags, uint32_t offset, Data* data);
@@ -27,8 +27,6 @@ namespace vsg
         Data* getData() noexcept { return _data; }
         const Data* getData() const noexcept { return _data; }
 
-        void pushTo(State& state) const override;
-        void popFrom(State& state) const override;
         void dispatch(CommandBuffer& commandBuffer) const override;
 
     protected:
@@ -38,5 +36,6 @@ namespace vsg
         uint32_t _offset;
         ref_ptr<Data> _data;
     };
+    VSG_type_name(vsg::PushConstants);
 
 } // namespace vsg

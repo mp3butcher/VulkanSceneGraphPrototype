@@ -20,10 +20,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 namespace vsg
 {
+
     class VSG_DECLSPEC Group : public Inherit<Node, Group>
     {
     public:
         Group(size_t numChildren = 0);
+        Group(Allocator* allocator, size_t numChildren = 0);
 
         template<class N, class V>
         static void t_traverse(N& node, V& visitor)
@@ -35,6 +37,9 @@ namespace vsg
         void traverse(ConstVisitor& visitor) const override { t_traverse(*this, visitor); }
         void traverse(DispatchTraversal& visitor) const override { t_traverse(*this, visitor); }
         void traverse(CullTraversal& visitor) const override { t_traverse(*this, visitor); }
+
+        void read(Input& input) override;
+        void write(Output& output) const override;
 
         std::size_t addChild(vsg::ref_ptr<Node> child)
         {
@@ -53,6 +58,7 @@ namespace vsg
 
         using Children = std::vector<ref_ptr<vsg::Node>>;
 
+        void setChildren(const Children& children) { _children = children; }
         Children& getChildren() noexcept { return _children; }
         const Children& getChildren() const noexcept { return _children; }
 
@@ -61,5 +67,6 @@ namespace vsg
 
         Children _children;
     };
+    VSG_type_name(vsg::Group);
 
 } // namespace vsg

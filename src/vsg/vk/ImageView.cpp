@@ -30,19 +30,8 @@ ImageView::~ImageView()
     }
 }
 
-ImageView::Result ImageView::create(Device* device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, AllocationCallbacks* allocator)
+ImageView::Result ImageView::create(Device* device, const VkImageViewCreateInfo& createInfo, AllocationCallbacks* allocator)
 {
-    VkImageViewCreateInfo createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    createInfo.image = image;
-    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    createInfo.format = format;
-    createInfo.subresourceRange.aspectMask = aspectFlags;
-    createInfo.subresourceRange.baseMipLevel = 0;
-    createInfo.subresourceRange.levelCount = 1;
-    createInfo.subresourceRange.baseArrayLayer = 0;
-    createInfo.subresourceRange.layerCount = 1;
-
     VkImageView view;
     VkResult result = vkCreateImageView(*device, &createInfo, allocator, &view);
     if (result == VK_SUCCESS)
@@ -55,27 +44,38 @@ ImageView::Result ImageView::create(Device* device, VkImage image, VkFormat form
     }
 }
 
-ImageView::Result ImageView::create(Device* device, Image* image, VkFormat format, VkImageAspectFlags aspectFlags, AllocationCallbacks* allocator)
+ImageView::Result ImageView::create(Device* device, VkImage image, VkImageViewType type, VkFormat format, VkImageAspectFlags aspectFlags, AllocationCallbacks* allocator)
 {
     VkImageViewCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    createInfo.image = *image;
-    createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D; // read from image?
+    createInfo.image = image;
+    createInfo.viewType = type;
     createInfo.format = format;
     createInfo.subresourceRange.aspectMask = aspectFlags;
     createInfo.subresourceRange.baseMipLevel = 0;
     createInfo.subresourceRange.levelCount = 1;
     createInfo.subresourceRange.baseArrayLayer = 0;
     createInfo.subresourceRange.layerCount = 1;
+    createInfo.pNext = nullptr;
 
-    VkImageView view;
-    VkResult result = vkCreateImageView(*device, &createInfo, allocator, &view);
-    if (result == VK_SUCCESS)
-    {
-        return Result(new ImageView(view, device, image, allocator));
-    }
-    else
-    {
-        return Result("Error: Failed to create ImageView.", result);
-    }
+    return create(device, createInfo, allocator);
+}
+
+ImageView::Result ImageView::create(Device* device, Image* image, VkImageViewType type, VkFormat format, VkImageAspectFlags aspectFlags, AllocationCallbacks* allocator)
+{
+    VkImageViewCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    createInfo.image = *image;
+    createInfo.viewType = type; // read from image?
+    createInfo.format = format; // read from image?
+    createInfo.subresourceRange.aspectMask = aspectFlags;
+    createInfo.subresourceRange.baseMipLevel = 0;
+    createInfo.subresourceRange.levelCount = 1;
+    createInfo.subresourceRange.baseArrayLayer = 0;
+    createInfo.subresourceRange.layerCount = 1;
+    createInfo.pNext = nullptr;
+
+    Result result = create(device, createInfo, allocator);
+    if (result) result.object()->setImage(image);
+    return result;
 }

@@ -12,8 +12,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/traversals/DispatchTraversal.h>
 
+#include <vsg/nodes/Commands.h>
+#include <vsg/nodes/CullGroup.h>
+#include <vsg/nodes/CullNode.h>
 #include <vsg/nodes/Group.h>
 #include <vsg/nodes/LOD.h>
+#include <vsg/nodes/MatrixTransform.h>
+#include <vsg/nodes/PagedLOD.h>
 #include <vsg/nodes/QuadGroup.h>
 #include <vsg/nodes/StateGroup.h>
 
@@ -22,37 +27,35 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/vk/RenderPass.h>
 #include <vsg/vk/State.h>
 
-#include <iostream>
+#include <vsg/io/DatabasePager.h>
+#include <vsg/io/Options.h>
+
+#include <vsg/ui/ApplicationEvent.h>
+
+#include <vsg/maths/plane.h>
+
+#include <vsg/threading/atomics.h>
 
 using namespace vsg;
 
-#define INLINE_TRAVERSE
+#include <iostream>
 
-struct DispatchTraversal::Data
-{
-    explicit Data(CommandBuffer* commandBuffer) :
-        _commandBuffer(commandBuffer)
-    {
-        std::cout << "DispatchTraversal::Data::Data(" << commandBuffer << ")" << std::endl;
-    }
+#define INLINE_TRAVERSE 1
+#define USE_FRUSTUM_ARRAY 1
 
-    ~Data()
-    {
-        std::cout << "DispatchTraversal::Data::~Data()" << std::endl;
-    }
-
-    State _state;
-    ref_ptr<CommandBuffer> _commandBuffer;
-};
-
-DispatchTraversal::DispatchTraversal(CommandBuffer* commandBuffer) :
-    _data(new Data(commandBuffer))
+DispatchTraversal::DispatchTraversal(CommandBuffer* commandBuffer, uint32_t maxSlot, ref_ptr<FrameStamp> fs) :
+    frameStamp(fs),
+    state(new State(commandBuffer, maxSlot))
 {
 }
 
 DispatchTraversal::~DispatchTraversal()
 {
-    delete _data;
+}
+
+void DispatchTraversal::setProjectionAndViewMatrix(const dmat4& projMatrix, const dmat4& viewMatrix)
+{
+    state->setProjectionAndViewMatrix(projMatrix, viewMatrix);
 }
 
 void DispatchTraversal::apply(const Object& object)
@@ -64,7 +67,7 @@ void DispatchTraversal::apply(const Object& object)
 void DispatchTraversal::apply(const Group& group)
 {
 //    std::cout<<"Visiting Group "<<std::endl;
-#ifdef INLINE_TRAVERSE
+#if INLINE_TRAVERSE
     vsg::Group::t_traverse(group, *this);
 #else
     group.traverse(*this);
@@ -74,33 +77,220 @@ void DispatchTraversal::apply(const Group& group)
 void DispatchTraversal::apply(const QuadGroup& group)
 {
 //    std::cout<<"Visiting QuadGroup "<<std::endl;
-#ifdef INLINE_TRAVERSE
+#if INLINE_TRAVERSE
     vsg::QuadGroup::t_traverse(group, *this);
 #else
     group.traverse(*this);
 #endif
 }
 
-void DispatchTraversal::apply(const LOD& object)
+void DispatchTraversal::apply(const LOD& lod)
 {
-    //    std::cout<<"Visiting LOD "<<std::endl;
-    object.traverse(*this);
+    auto sphere = lod.getBound();
+
+    // check if lod bounding sphere is in view frustum.
+    if (!state->intersect(sphere))
+    {
+        return;
+    }
+
+    const auto& proj = state->projectionMatrixStack.top();
+    const auto& mv = state->modelviewMatrixStack.top();
+    auto f = -proj[1][1];
+
+    auto distance = std::abs(mv[0][2] * sphere.x + mv[1][2] * sphere.y + mv[2][2] * sphere.z + mv[3][2]);
+    auto rf = sphere.r * f;
+
+    for (auto lodChild : lod.getChildren())
+    {
+        bool child_visible = rf > (lodChild.minimumScreenHeightRatio * distance);
+        if (child_visible)
+        {
+            lodChild.child->accept(*this);
+            return;
+        }
+    }
+}
+
+void DispatchTraversal::apply(const PagedLOD& plod)
+{
+    auto sphere = plod.getBound();
+
+    auto frameCount = frameStamp->frameCount;
+
+    // check if lod bounding sphere is in view frustum.
+    if (!state->intersect(sphere))
+    {
+        if ((frameCount - plod.frameHighResLastUsed) > 1 && culledPagedLODs)
+        {
+            culledPagedLODs->highresCulled.emplace_back(&plod);
+        }
+
+        return;
+    }
+
+    const auto& proj = state->projectionMatrixStack.top();
+    const auto& mv = state->modelviewMatrixStack.top();
+    auto f = -proj[1][1];
+
+    auto distance = std::abs(mv[0][2] * sphere.x + mv[1][2] * sphere.y + mv[2][2] * sphere.z + mv[3][2]);
+    auto rf = sphere.r * f;
+
+    // check the high res child to see if it's visible
+    {
+        const auto& child = plod.getChild(0);
+        auto cutoff = child.minimumScreenHeightRatio * distance;
+        bool child_visible = rf > cutoff;
+        if (child_visible)
+        {
+            auto previousHighResUsed = plod.frameHighResLastUsed.exchange(frameCount);
+            if (culledPagedLODs && ((frameCount - previousHighResUsed) > 1))
+            {
+                culledPagedLODs->newHighresRequired.emplace_back(&plod);
+            }
+
+            if (child.node)
+            {
+                // high res visible and availably so traverse it
+                child.node->accept(*this);
+                return;
+            }
+            else if (databasePager)
+            {
+                auto priority = rf / cutoff;
+                exchange_if_greater(plod.priority, priority);
+
+                auto previousRequestCount = plod.requestCount.fetch_add(1);
+                if (previousRequestCount == 0)
+                {
+                    // we are first request so tell the databasePager about it
+                    databasePager->request(ref_ptr<PagedLOD>(const_cast<PagedLOD*>(&plod)));
+                }
+                else
+                {
+                    //std::cout<<"repeat request "<<&plod<<", "<<plod.requestCount.load()<<std::endl;;
+                }
+            }
+        }
+        else
+        {
+            if (culledPagedLODs && ((frameCount - plod.frameHighResLastUsed) <= 1))
+            {
+                culledPagedLODs->highresCulled.emplace_back(&plod);
+            }
+        }
+    }
+
+    // check the low res child to see if it's visible
+    {
+        const auto& child = plod.getChild(1);
+        auto cutoff = child.minimumScreenHeightRatio * distance;
+        bool child_visible = rf > cutoff;
+        if (child_visible)
+        {
+            if (child.node)
+            {
+                child.node->accept(*this);
+            }
+        }
+    }
+}
+
+void DispatchTraversal::apply(const CullGroup& cullGroup)
+{
+#if 0
+    // no culling
+    cullGroup.traverse(*this);
+#else
+    if (state->intersect(cullGroup.getBound()))
+    {
+        //std::cout<<"Passed node"<<std::endl;
+        cullGroup.traverse(*this);
+    }
+    else
+    {
+        //std::cout<<"Culling node"<<std::endl;
+    }
+#endif
+}
+
+void DispatchTraversal::apply(const CullNode& cullNode)
+{
+#if 0
+    // no culling
+    cullNode.traverse(*this);
+#else
+    if (state->intersect(cullNode.getBound()))
+    {
+        //std::cout<<"Passed node"<<std::endl;
+        cullNode.traverse(*this);
+    }
+    else
+    {
+        //std::cout<<"Culling node"<<std::endl;
+    }
+#endif
 }
 
 void DispatchTraversal::apply(const StateGroup& stateGroup)
 {
     //    std::cout<<"Visiting StateGroup "<<std::endl;
-    stateGroup.pushTo(_data->_state);
+
+    const StateGroup::StateCommands& stateCommands = stateGroup.getStateCommands();
+    for (auto& command : stateCommands)
+    {
+        state->stateStacks[command->getSlot()].push(command);
+    }
+    state->dirty = true;
 
     stateGroup.traverse(*this);
 
-    //    stateGroup.popFrom(_data->_state);
+    for (auto& command : stateCommands)
+    {
+        state->stateStacks[command->getSlot()].pop();
+    }
+    state->dirty = true;
+}
+
+void DispatchTraversal::apply(const MatrixTransform& mt)
+{
+    if (mt.getSubgraphRequiresLocalFrustum())
+    {
+        state->modelviewMatrixStack.pushAndPreMult(mt.getMatrix());
+        state->pushFrustum();
+        state->dirty = true;
+
+        mt.traverse(*this);
+
+        state->modelviewMatrixStack.pop();
+        state->popFrustum();
+        state->dirty = true;
+    }
+    else
+    {
+        state->modelviewMatrixStack.pushAndPreMult(mt.getMatrix());
+        state->dirty = true;
+
+        mt.traverse(*this);
+
+        state->modelviewMatrixStack.pop();
+        state->dirty = true;
+    }
 }
 
 // Vulkan nodes
+void DispatchTraversal::apply(const Commands& commands)
+{
+    state->dispatch();
+    for (auto& command : commands.getChildren())
+    {
+        command->dispatch(*(state->_commandBuffer));
+    }
+}
+
 void DispatchTraversal::apply(const Command& command)
 {
     //    std::cout<<"Visiting Command "<<std::endl;
-    _data->_state.dispatch(*(_data->_commandBuffer));
-    command.dispatch(*(_data->_commandBuffer));
+    state->dispatch();
+    command.dispatch(*(state->_commandBuffer));
 }

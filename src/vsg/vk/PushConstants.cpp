@@ -10,12 +10,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/vk/CommandBuffer.h>
 #include <vsg/vk/PushConstants.h>
-#include <vsg/vk/State.h>
 
 using namespace vsg;
 
 PushConstants::PushConstants(VkShaderStageFlags stageFlags, uint32_t offset, Data* data) :
+    Inherit(2), // slot 0
     _stageFlags(stageFlags),
     _offset(offset),
     _data(data)
@@ -26,22 +27,7 @@ PushConstants::~PushConstants()
 {
 }
 
-void PushConstants::pushTo(State& state) const
-{
-    state.pushConstantsMap[_offset].push(this);
-}
-
-void PushConstants::popFrom(State& state) const
-{
-    state.pushConstantsMap[_offset].pop();
-}
-
 void PushConstants::dispatch(CommandBuffer& commandBuffer) const
 {
-    const PipelineLayout* pipelineLayout = commandBuffer.getCurrentPipelineLayout();
-    if (pipelineLayout)
-    {
-
-        vkCmdPushConstants(commandBuffer, *pipelineLayout, _stageFlags, _offset, _data->dataSize(), _data->dataPointer());
-    }
+    vkCmdPushConstants(commandBuffer, commandBuffer.getCurrentPipelineLayout(), _stageFlags, _offset, static_cast<uint32_t>(_data->dataSize()), _data->dataPointer());
 }

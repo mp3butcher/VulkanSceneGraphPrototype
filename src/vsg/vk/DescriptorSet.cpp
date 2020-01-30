@@ -10,82 +10,262 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/vk/CommandBuffer.h>
 #include <vsg/vk/DescriptorSet.h>
-#include <vsg/vk/State.h>
+
+#include <vsg/traversals/CompileTraversal.h>
 
 using namespace vsg;
 
-DescriptorSet::DescriptorSet(VkDescriptorSet descriptorSet, Device* device, DescriptorPool* descriptorPool, DescriptorSetLayout* descriptorSetLayout, const Descriptors& descriptors) :
-    _descriptorSet(descriptorSet),
-    _device(device),
-    _descriptorPool(descriptorPool),
-    _descriptorSetLayout(descriptorSetLayout)
+#define USE_MUTEX 0
+
+DescriptorSet::DescriptorSet()
 {
-    assign(descriptors);
+}
+
+DescriptorSet::DescriptorSet(const DescriptorSetLayouts& descriptorSetLayouts, const Descriptors& descriptors) :
+    _descriptorSetLayouts(descriptorSetLayouts),
+    _descriptors(descriptors)
+{
 }
 
 DescriptorSet::~DescriptorSet()
 {
+}
+
+void DescriptorSet::read(Input& input)
+{
+    Object::read(input);
+
+    _descriptorSetLayouts.resize(input.readValue<uint32_t>("NumDescriptorSetLayouts"));
+    for (auto& descriptorSetLayout : _descriptorSetLayouts)
+    {
+        descriptorSetLayout = input.readObject<DescriptorSetLayout>("DescriptorSetLayout");
+    }
+
+    _descriptors.resize(input.readValue<uint32_t>("NumDescriptors"));
+    for (auto& descriptor : _descriptors)
+    {
+        descriptor = input.readObject<Descriptor>("Descriptor");
+    }
+}
+
+void DescriptorSet::write(Output& output) const
+{
+    Object::write(output);
+
+    output.writeValue<uint32_t>("NumDescriptorSetLayouts", _descriptorSetLayouts.size());
+    for (auto& descriptorSetLayout : _descriptorSetLayouts)
+    {
+        output.writeObject("DescriptorSetLayout", descriptorSetLayout.get());
+    }
+
+    output.writeValue<uint32_t>("NumDescriptors", _descriptors.size());
+    for (auto& descriptor : _descriptors)
+    {
+        output.writeObject("Descriptor", descriptor.get());
+    }
+}
+
+void DescriptorSet::compile(Context& context)
+{
+    if (!_implementation)
+    {
+        // make sure all the contributing objects are compiled
+        for (auto& descriptorSetLayout : _descriptorSetLayouts) descriptorSetLayout->compile(context);
+        for (auto& descriptor : _descriptors) descriptor->compile(context);
+
+#if USE_MUTEX
+        std::lock_guard<std::mutex> lock(context.descriptorPool->getMutex());
+#endif
+        _implementation = DescriptorSet::Implementation::create(context.device, context.descriptorPool, _descriptorSetLayouts, _descriptors);
+    }
+}
+
+DescriptorSet::Implementation::Implementation(VkDescriptorSet descriptorSet, Device* device, DescriptorPool* descriptorPool, const DescriptorSetLayouts& descriptorSetLayouts, const Descriptors& descriptors) :
+    _descriptorSet(descriptorSet),
+    _device(device),
+    _descriptorPool(descriptorPool),
+    _descriptorSetLayouts(descriptorSetLayouts)
+{
+    assign(descriptors);
+}
+
+DescriptorSet::Implementation::~Implementation()
+{
     if (_descriptorSet)
     {
+#if USE_MUTEX
+        std::lock_guard<std::mutex> lock(_descriptorPool->getMutex());
+#endif
         vkFreeDescriptorSets(*_device, *_descriptorPool, 1, &_descriptorSet);
     }
 }
 
-DescriptorSet::Result DescriptorSet::create(Device* device, DescriptorPool* descriptorPool, DescriptorSetLayout* descriptorSetLayout, const Descriptors& descriptors)
+DescriptorSet::Implementation::Result DescriptorSet::Implementation::create(Device* device, DescriptorPool* descriptorPool, const DescriptorSetLayouts& descriptorSetLayouts, const Descriptors& descriptors)
 {
-    if (!device || !descriptorPool || !descriptorSetLayout)
+    if (!device || !descriptorPool || descriptorSetLayouts.empty())
     {
-        return Result("Error: vsg::DescriptorPool::create(...) failed to create DescriptorPool, undefined Device, DescriptorPool or DescriptorSetLayout.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
+        return Result("Error: vsg::DescriptorPool::create(...) failed to create DescriptorPool, undefined Device, DescriptorPool or DescriptorSetLayouts.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
     }
 
-    VkDescriptorSetLayout descriptorSetLayouts[] = {*descriptorSetLayout};
+    std::vector<VkDescriptorSetLayout> vkdescriptorSetLayouts;
+    for (auto& descriptorSetLayout : descriptorSetLayouts)
+    {
+        vkdescriptorSetLayouts.push_back(*descriptorSetLayout);
+    }
 
     VkDescriptorSetAllocateInfo descriptSetAllocateInfo = {};
     descriptSetAllocateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     descriptSetAllocateInfo.descriptorPool = *descriptorPool;
-    descriptSetAllocateInfo.descriptorSetCount = 1;
-    descriptSetAllocateInfo.pSetLayouts = descriptorSetLayouts;
+    descriptSetAllocateInfo.descriptorSetCount = static_cast<uint32_t>(vkdescriptorSetLayouts.size());
+    descriptSetAllocateInfo.pSetLayouts = vkdescriptorSetLayouts.data();
 
     VkDescriptorSet descriptorSet;
     VkResult result = vkAllocateDescriptorSets(*device, &descriptSetAllocateInfo, &descriptorSet);
     if (result == VK_SUCCESS)
     {
-        return Result(new DescriptorSet(descriptorSet, device, descriptorPool, descriptorSetLayout, descriptors));
+        return Result(new DescriptorSet::Implementation(descriptorSet, device, descriptorPool, descriptorSetLayouts, descriptors));
     }
     else
     {
-        return Result("Error: Failed to create DescriptorPool.", result);
+        return Result("Error: Failed to create DescriptorSet.", result);
     }
 }
 
-void DescriptorSet::assign(const Descriptors& descriptors)
+void DescriptorSet::Implementation::assign(const Descriptors& descriptors)
 {
     // should we doing anything about previous _descriptor that may have been assigned?
     _descriptors = descriptors;
 
+    if (_descriptors.empty()) return;
+
+    uint32_t descritorCount = 0;
     std::vector<VkWriteDescriptorSet> descriptorWrites(_descriptors.size());
     for (size_t i = 0; i < _descriptors.size(); ++i)
     {
-        _descriptors[i]->assignTo(descriptorWrites[i], _descriptorSet);
+        if (_descriptors[i]->assignTo(descriptorWrites[descritorCount], _descriptorSet)) ++descritorCount;
     }
 
-    vkUpdateDescriptorSets(*_device, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
+    vkUpdateDescriptorSets(*_device, descritorCount, descriptorWrites.data(), 0, nullptr);
 }
 
-void BindDescriptorSets::pushTo(State& state) const
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// BindDescriptorSets
+//
+BindDescriptorSets::BindDescriptorSets() :
+    Inherit(1), // slot 1
+    _bindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS),
+    _firstSet(0),
+    _vkPipelineLayout(0)
 {
-    state.dirty = true;
-    state.descriptorStack.push(this);
 }
 
-void BindDescriptorSets::popFrom(State& state) const
+void BindDescriptorSets::read(Input& input)
 {
-    state.dirty = true;
-    state.descriptorStack.pop();
+    Object::read(input);
+
+    _pipelineLayout = input.readObject<PipelineLayout>("PipelineLayout");
+
+    input.read("firstSet", _firstSet);
+
+    _descriptorSets.resize(input.readValue<uint32_t>("NumDescriptorSets"));
+    for (auto& descriptorSet : _descriptorSets)
+    {
+        descriptorSet = input.readObject<DescriptorSet>("DescriptorSets");
+    }
+}
+
+void BindDescriptorSets::write(Output& output) const
+{
+    Object::write(output);
+
+    output.writeObject("PipelineLayout", _pipelineLayout.get());
+
+    output.write("firstSet", _firstSet);
+
+    output.writeValue<uint32_t>("NumDescriptorSets", _descriptorSets.size());
+    for (auto& descriptorSet : _descriptorSets)
+    {
+        output.writeObject("DescriptorSets", descriptorSet.get());
+    }
 }
 
 void BindDescriptorSets::dispatch(CommandBuffer& commandBuffer) const
 {
-    vkCmdBindDescriptorSets(commandBuffer, _bindPoint, *_pipelineLayout, 0, _vkDescriptorSets.size(), _vkDescriptorSets.data(), 0, nullptr);
+    vkCmdBindDescriptorSets(commandBuffer, _bindPoint, _vkPipelineLayout, _firstSet, static_cast<uint32_t>(_vkDescriptorSets.size()), _vkDescriptorSets.data(), 0, nullptr);
+}
+
+void BindDescriptorSets::compile(Context& context)
+{
+    if (_vkPipelineLayout != 0 && _vkDescriptorSets.size() > 0) return;
+
+    _pipelineLayout->compile(context);
+    _vkPipelineLayout = *(_pipelineLayout);
+
+    // no need to compile if already compiled
+    if (_vkDescriptorSets.size() == _descriptorSets.size()) return;
+
+    _vkDescriptorSets.resize(_descriptorSets.size());
+    for (size_t i = 0; i < _descriptorSets.size(); ++i)
+    {
+        _descriptorSets[i]->compile(context);
+
+        _vkDescriptorSets[i] = *(_descriptorSets[i]);
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// BindDescriptorSet
+//
+BindDescriptorSet::BindDescriptorSet() :
+    _bindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS),
+    _firstSet(0),
+    _vkPipelineLayout(0),
+    _vkDescriptorSet(0)
+{
+}
+
+void BindDescriptorSet::read(Input& input)
+{
+    StateCommand::read(input);
+
+    _pipelineLayout = input.readObject<PipelineLayout>("PipelineLayout");
+
+    input.read("firstSet", _firstSet);
+
+    _descriptorSet = input.readObject<DescriptorSet>("DescriptorSet");
+}
+
+void BindDescriptorSet::write(Output& output) const
+{
+    StateCommand::write(output);
+
+    output.writeObject("PipelineLayout", _pipelineLayout.get());
+
+    output.write("firstSet", _firstSet);
+
+    output.writeObject("DescriptorSet", _descriptorSet.get());
+}
+
+void BindDescriptorSet::dispatch(CommandBuffer& commandBuffer) const
+{
+    vkCmdBindDescriptorSets(commandBuffer, _bindPoint, _vkPipelineLayout, _firstSet, 1, &_vkDescriptorSet, 0, nullptr);
+}
+
+void BindDescriptorSet::compile(Context& context)
+{
+    // no need to compile if already compiled
+    if (_vkPipelineLayout != 0 && _vkDescriptorSet != 0) return;
+
+    // check if pipeline and descriptor set are assigned.
+    if (!_descriptorSet || !_pipelineLayout) return;
+
+    _pipelineLayout->compile(context);
+    _vkPipelineLayout = *(_pipelineLayout);
+
+    _descriptorSet->compile(context);
+    _vkDescriptorSet = *(_descriptorSet);
 }

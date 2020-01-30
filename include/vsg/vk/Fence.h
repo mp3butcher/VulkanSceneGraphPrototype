@@ -12,7 +12,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/vk/Device.h>
+#include <vsg/vk/CommandBuffer.h>
+#include <vsg/vk/Semaphore.h>
 
 namespace vsg
 {
@@ -26,7 +27,16 @@ namespace vsg
 
         VkResult wait(uint64_t timeout) const { return vkWaitForFences(*_device, 1, &_vkFence, VK_TRUE, timeout); }
 
+        VkResult reset() const { return vkResetFences(*_device, 1, &_vkFence); }
+
+        VkResult status() const { return vkGetFenceStatus(*_device, _vkFence); }
+
+        VkFence fence() const { return _vkFence; }
+
         operator VkFence() const { return _vkFence; }
+
+        Semaphores& dependentSemaphores() { return _dependentSemaphores; }
+        CommandBuffers& dependentCommandBuffers() { return _dependentCommandBuffers; }
 
         Device* getDevice() { return _device; }
         const Device* getDevice() const { return _device; }
@@ -35,6 +45,9 @@ namespace vsg
         virtual ~Fence();
 
         VkFence _vkFence;
+        Semaphores _dependentSemaphores;
+        CommandBuffers _dependentCommandBuffers;
+
         ref_ptr<Device> _device;
         ref_ptr<AllocationCallbacks> _allocator;
     };

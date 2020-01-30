@@ -19,7 +19,7 @@ namespace vsg
     class VSG_DECLSPEC Buffer : public Inherit<Object, Buffer>
     {
     public:
-        Buffer(VkBuffer Buffer, VkBufferUsageFlags usage, VkSharingMode sharingMode, Device* device, AllocationCallbacks* allocator = nullptr);
+        Buffer(VkBuffer Buffer, VkDeviceSize size, VkBufferUsageFlags usage, VkSharingMode sharingMode, Device* device, AllocationCallbacks* allocator = nullptr);
 
         using Result = vsg::Result<Buffer, VkResult, VK_SUCCESS>;
         static Result create(Device* device, VkDeviceSize size, VkBufferUsageFlags usage, VkSharingMode sharingMode, AllocationCallbacks* allocator = nullptr);
@@ -34,6 +34,8 @@ namespace vsg
         DeviceMemory* getDeviceMemory() { return _deviceMemory; }
         const DeviceMemory* getDeviceMemory() const { return _deviceMemory; }
 
+        VkDeviceSize getMemoryOffset() const { return _memoryOffset; }
+
         VkResult bind(DeviceMemory* deviceMemory, VkDeviceSize memoryOffset)
         {
             VkResult result = vkBindBufferMemory(*_device, _buffer, *deviceMemory, memoryOffset);
@@ -47,6 +49,12 @@ namespace vsg
 
         operator VkBuffer() const { return _buffer; }
 
+        MemorySlots::OptionalOffset reserve(VkDeviceSize size, VkDeviceSize alignment) { return _memorySlots.reserve(size, alignment); }
+        void release(VkDeviceSize offset, VkDeviceSize size) { _memorySlots.release(offset, size); }
+        bool full() const { return _memorySlots.full(); }
+        VkDeviceSize maximumAvailableSpace() const { return _memorySlots.maximumAvailableSpace(); }
+        const MemorySlots& memorySlots() const { return _memorySlots; }
+
     protected:
         virtual ~Buffer();
 
@@ -59,5 +67,7 @@ namespace vsg
 
         ref_ptr<DeviceMemory> _deviceMemory;
         VkDeviceSize _memoryOffset;
+
+        MemorySlots _memorySlots;
     };
 } // namespace vsg

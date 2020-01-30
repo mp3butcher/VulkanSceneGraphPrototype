@@ -10,13 +10,41 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/traversals/CompileTraversal.h>
 #include <vsg/vk/BufferData.h>
 #include <vsg/vk/CommandBuffer.h>
 
 using namespace vsg;
 
-BufferDataList vsg::createBufferAndTransferData(Device* device, CommandPool* commandPool, VkQueue graphicsQueue, const DataList& dataList, VkBufferUsageFlags usage, VkSharingMode sharingMode)
+/////////////////////////////////////////////////////////////////////////////////////////
+//
+// vsg::createBufferAndTransferData
+//
+BufferDataList vsg::createBufferAndTransferData(Context& context, const DataList& dataList, VkBufferUsageFlags usage, VkSharingMode sharingMode)
 {
+    //std::cout<<"\nvsg::createBufferAndTransferData()"<<std::endl;
+
+    //return BufferDataList();
+
+    //std::cout<<"New vsg::createBufferAndTransferData()"<<std::endl;
+
+    // compute memory requirements
+
+    // create staging buffer
+    // create staging memory
+    // bind staging buffer
+    // map staging memory
+    //    copy data to staging memory
+    // unmap staging memory
+    //
+    // create device buffer
+    // create device memory
+    // submit command to copy from staging buffer to device buffer
+    //
+    // assign device buffer to BufferDataList
+
+    Device* device = context.device;
+
     if (dataList.empty()) return BufferDataList();
 
     BufferDataList bufferDataList;
@@ -29,50 +57,77 @@ BufferDataList vsg::createBufferAndTransferData(Device* device, CommandPool* com
     bufferDataList.reserve(dataList.size());
     for (auto& data : dataList)
     {
-        bufferDataList.push_back(BufferData(0, offset, data->dataSize()));
+        bufferDataList.push_back(BufferData(0, offset, data->dataSize(), data));
         VkDeviceSize endOfEntry = offset + data->dataSize();
         offset = (alignment == 1 || (endOfEntry % alignment) == 0) ? endOfEntry : ((endOfEntry / alignment) + 1) * alignment;
     }
 
     totalSize = bufferDataList.back()._offset + bufferDataList.back()._range;
 
-    ref_ptr<Buffer> stagingBuffer = vsg::Buffer::create(device, totalSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sharingMode);
-    ref_ptr<DeviceMemory> stagingMemory = vsg::DeviceMemory::create(device, stagingBuffer, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    stagingBuffer->bind(stagingMemory, 0);
+    VkBufferUsageFlags bufferUsageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage;
 
-    void* buffer_data;
-    stagingMemory->map(0, totalSize, 0, &buffer_data);
-    char* ptr = reinterpret_cast<char*>(buffer_data);
+    BufferData deviceBufferData = context.deviceMemoryBufferPools->reserveBufferData(totalSize, alignment, bufferUsageFlags, sharingMode, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    for (size_t i = 0; i < dataList.size(); ++i)
-    {
-        const Data* data = dataList[i];
-        std::memcpy(ptr + bufferDataList[i]._offset, data->dataPointer(), data->dataSize());
-    }
-
-    stagingMemory->unmap();
-
-    ref_ptr<Buffer> deviceBuffer = vsg::Buffer::create(device, totalSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage, sharingMode);
-    ref_ptr<DeviceMemory> deviceMemory = vsg::DeviceMemory::create(device, deviceBuffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    deviceBuffer->bind(deviceMemory, 0);
-
-    dispatchCommandsToQueue(device, commandPool, graphicsQueue, [&](VkCommandBuffer transferCommand) {
-        VkBufferCopy copyRegion = {};
-        copyRegion.srcOffset = 0;
-        copyRegion.dstOffset = 0;
-        copyRegion.size = totalSize;
-        vkCmdCopyBuffer(transferCommand, *stagingBuffer, *deviceBuffer, 1, &copyRegion);
-    });
+    //std::cout<<"deviceBufferData._buffer "<<deviceBufferData._buffer.get()<<", "<<deviceBufferData._offset<<", "<<deviceBufferData._range<<")"<<std::endl;
 
     // assign the buffer to the bufferData entries
     for (auto& bufferData : bufferDataList)
     {
-        bufferData._buffer = deviceBuffer;
+        bufferData._buffer = deviceBufferData._buffer;
+        bufferData._offset += deviceBufferData._offset;
     }
+
+    BufferData stagingBufferData = context.stagingMemoryBufferPools->reserveBufferData(totalSize, alignment, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, sharingMode, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    //std::cout<<"stagingBufferData._buffer "<<stagingBufferData._buffer.get()<<", "<<stagingBufferData._offset<<", "<<stagingBufferData._range<<")"<<std::endl;
+
+    ref_ptr<Buffer> stagingBuffer(stagingBufferData._buffer);
+    ref_ptr<DeviceMemory> stagingMemory(stagingBuffer->getDeviceMemory());
+
+    if (!stagingMemory)
+    {
+        return BufferDataList();
+    }
+
+    void* buffer_data;
+    stagingMemory->map(stagingBuffer->getMemoryOffset() + stagingBufferData._offset, stagingBufferData._range, 0, &buffer_data);
+    char* ptr = reinterpret_cast<char*>(buffer_data);
+
+    //std::cout<<"    buffer_data " <<buffer_data<<", stagingBufferData._offset="<<stagingBufferData._offset<<", "<<totalSize<< std::endl;
+
+    for (size_t i = 0; i < dataList.size(); ++i)
+    {
+        const Data* data = dataList[i];
+        std::memcpy(ptr + bufferDataList[i]._offset - deviceBufferData._offset, data->dataPointer(), data->dataSize());
+    }
+
+    stagingMemory->unmap();
+
+#if 0 // merging of ByfferDataCommands caused problems with later release of individual parts of the buffers copied, so removing this optimization
+    CopyAndReleaseBufferDataCommand* previous = context.copyBufferDataCommands.empty() ? nullptr : context.copyBufferDataCommands.back().get();
+    if (previous)
+    {
+        bool sourceMatched = (previous->source._buffer == stagingBufferData._buffer) && ((previous->source._offset + previous->source._range) == stagingBufferData._offset);
+        bool destinationMatched = (previous->destination._buffer == deviceBufferData._buffer) && ((previous->destination._offset + previous->destination._range) == deviceBufferData._offset);
+
+        if (sourceMatched && destinationMatched)
+        {
+            //std::cout<<"Source matched = "<<sourceMatched<<" destinationMatched = "<<destinationMatched<<std::endl;
+            previous->source._range += stagingBufferData._range;
+            previous->destination._range += stagingBufferData._range;
+            return bufferDataList;
+        }
+    }
+#endif
+    context.copyBufferDataCommands.emplace_back(new CopyAndReleaseBufferDataCommand(stagingBufferData, deviceBufferData));
 
     return bufferDataList;
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
+//
+// vsg::createHostVisibleBuffer
+//
 BufferDataList vsg::createHostVisibleBuffer(Device* device, const DataList& dataList, VkBufferUsageFlags usage, VkSharingMode sharingMode)
 {
     if (dataList.empty()) return BufferDataList();

@@ -55,9 +55,18 @@ public:
         VkFormat _depthFormat ,_imageFormat;
         /*RenderPass(VkRenderPass renderPass, Device* device, AllocationCallbacks* allocator = nullptr);
 
+
+
         using Result = vsg::Result<RenderPass, VkResult, VK_SUCCESS>;
         static Result create(Device* device, VkFormat imageFormat, VkFormat depthFormat, AllocationCallbacks* allocator = nullptr);
+
 */
+        using VkAttachments = std::vector<VkAttachmentDescription>;
+        using VkSubpasses = std::vector<VkSubpassDescription>;
+        using VkDependencies = std::vector<VkSubpassDependency>;
+      //  static Result create(Device* device, const Attachments& attachments, const Subpasses& subpasses, const Dependancies& dependancies, AllocationCallbacks* allocator = nullptr);
+
+
         operator VkRenderPass() const { return _renderPass; }
 
         Device* getDevice() { return _device; }

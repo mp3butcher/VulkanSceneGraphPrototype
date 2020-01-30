@@ -11,6 +11,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/core/Auxiliary.h>
+#include <vsg/io/Input.h>
+#include <vsg/io/Output.h>
 
 #if 1
 #    include <iostream>
@@ -83,15 +85,16 @@ void Auxiliary::unref_nodelete() const
 
 bool Auxiliary::signalConnectedObjectToBeDeleted()
 {
-    Object* previousPtr = _connectedObject.exchange(0);
-    if (previousPtr && previousPtr->referenceCount() > 0)
-    {
-        // referenceCount has been incremented by another thread, so now restore the _connectedObject
-        _connectedObject.exchange(previousPtr);
+    std::lock_guard<std::mutex> guard(_mutex);
 
+    if (_connectedObject && _connectedObject->referenceCount() > 0)
+    {
         // return false, the object should not be deleted
         return false;
     }
+
+    // disconnect this Auxiliary object from the ConnectedObject
+    _connectedObject = 0;
 
     // return true, the object should be deleted
     return true;
@@ -99,7 +102,9 @@ bool Auxiliary::signalConnectedObjectToBeDeleted()
 
 void Auxiliary::resetConnectedObject()
 {
-    _connectedObject.exchange(0);
+    std::lock_guard<std::mutex> guard(_mutex);
+
+    _connectedObject = 0;
 }
 
 void Auxiliary::setObject(const std::string& key, Object* object)

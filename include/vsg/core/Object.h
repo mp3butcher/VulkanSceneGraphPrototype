@@ -28,11 +28,18 @@ namespace vsg
     class DispatchTraversal;
     class CullTraversal;
     class Allocator;
+    class Input;
+    class Output;
+
+    template<typename T>
+    constexpr bool has_read_write() { return false; }
 
     class VSG_DECLSPEC Object
     {
     public:
         Object();
+
+        explicit Object(Allocator* allocator);
 
         Object(const Object&) = delete;
         Object& operator=(const Object&) = delete;
@@ -40,6 +47,7 @@ namespace vsg
         //static ref_ptr<Object> create(Allocator* allocator=nullptr);
 
         virtual std::size_t sizeofObject() const noexcept { return sizeof(Object); }
+        virtual const char* className() const noexcept { return "vsg::Object"; }
 
         virtual void accept(Visitor& visitor);
         virtual void traverse(Visitor&) {}
@@ -53,11 +61,14 @@ namespace vsg
         virtual void accept(CullTraversal& visitor) const;
         virtual void traverse(CullTraversal&) const {}
 
+        virtual void read(Input& input);
+        virtual void write(Output& output) const;
+
         // ref counting methods
         inline void ref() const noexcept { _referenceCount.fetch_add(1, std::memory_order_relaxed); }
         inline void unref() const noexcept
         {
-            if (_referenceCount.fetch_sub(1, std::memory_order_seq_cst) <= 1) _delete();
+            if (_referenceCount.fetch_sub(1, std::memory_order_seq_cst) <= 1) _attemptDelete();
         }
         inline void unref_nodelete() const noexcept { _referenceCount.fetch_sub(1, std::memory_order_seq_cst); }
         inline unsigned int referenceCount() const noexcept { return _referenceCount.load(); }
@@ -79,13 +90,13 @@ namespace vsg
         Auxiliary* getAuxiliary() { return _auxiliary; }
         const Auxiliary* getAuxiliary() const { return _auxiliary; }
 
-        // convinience method for getting the optional Allocator, if present this Allocator would have been used to create this Objects memory
+        // convenience method for getting the optional Allocator, if present this Allocator would have been used to create this Objects memory
         Allocator* getAllocator() const;
 
     protected:
         virtual ~Object();
 
-        virtual void _delete() const;
+        virtual void _attemptDelete() const;
         void setAuxiliary(Auxiliary* auxiliary);
 
     private:
@@ -96,5 +107,8 @@ namespace vsg
 
         Auxiliary* _auxiliary;
     };
+
+    template<>
+    constexpr bool has_read_write<Object>() { return true; }
 
 } // namespace vsg

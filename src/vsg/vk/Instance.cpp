@@ -70,6 +70,7 @@ Instance::~Instance()
 
 Instance::Result Instance::create(Names& instanceExtensions, Names& layers, AllocationCallbacks* allocator)
 {
+#if 0
     std::cout << "Instance::create()" << std::endl;
     std::cout << "instanceExtensions : " << std::endl;
     for (auto& name : instanceExtensions)
@@ -82,14 +83,10 @@ Instance::Result Instance::create(Names& instanceExtensions, Names& layers, Allo
     {
         std::cout << "    " << name << std::endl;
     }
-
-    VkAllocationCallbacks* ac = (allocator != nullptr) ? allocator : nullptr;
     std::cout << "allocator : " << allocator << std::endl;
-    std::cout << "VkAllocationCallbacks* : " << ac << std::endl;
+#endif
 
-    ac = nullptr;
-
-    // applictin info
+    // application info
     VkApplicationInfo appInfo = {};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "Test";
@@ -101,17 +98,19 @@ Instance::Result Instance::create(Names& instanceExtensions, Names& layers, Allo
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
 
-    createInfo.enabledExtensionCount = instanceExtensions.size();
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size());
     createInfo.ppEnabledExtensionNames = instanceExtensions.empty() ? nullptr : instanceExtensions.data();
 
-    createInfo.enabledLayerCount = layers.size();
+    createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
     createInfo.ppEnabledLayerNames = layers.empty() ? nullptr : layers.data();
+
+    createInfo.pNext = nullptr;
 
     VkInstance instance;
     VkResult result = vkCreateInstance(&createInfo, allocator, &instance);
     if (result == VK_SUCCESS)
     {
-        std::cout << "Created VkInstance" << std::endl;
+        //std::cout << "Created VkInstance" << std::endl;
         return Result(new Instance(instance, allocator));
     }
     else

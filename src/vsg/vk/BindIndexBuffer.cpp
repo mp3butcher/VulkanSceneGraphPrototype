@@ -11,23 +11,65 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/vk/BindIndexBuffer.h>
-#include <vsg/vk/State.h>
+#include <vsg/vk/CommandBuffer.h>
 
 using namespace vsg;
 
-void BindIndexBuffer::pushTo(State& state) const
+BindIndexBuffer::BindIndexBuffer(Data* indices) :
+    _bufferData(nullptr, 0, 0, indices),
+    _indexType(computeIndexType(indices))
 {
-    state.dirty = true;
-    state.indexBufferStack.push(this);
 }
 
-void BindIndexBuffer::popFrom(State& state) const
+BindIndexBuffer::BindIndexBuffer(const BufferData& bufferData) :
+    _bufferData(bufferData),
+    _indexType(computeIndexType(bufferData._data))
 {
-    state.dirty = true;
-    state.indexBufferStack.pop();
+}
+
+BindIndexBuffer::~BindIndexBuffer()
+{
+    if (_bufferData._buffer)
+    {
+        _bufferData._buffer->release(_bufferData._offset, 0); // TODO, we don't locally have a size allocated
+    }
+}
+
+void BindIndexBuffer::read(Input& input)
+{
+    Command::read(input);
+
+    // reset the Vulkan related objects
+    _bufferData._buffer = 0;
+    _bufferData._offset = 0;
+    _bufferData._range = 0;
+
+    // read the key indices data
+    _bufferData._data = input.readObject<Data>("Indices");
+}
+
+void BindIndexBuffer::write(Output& output) const
+{
+    Command::write(output);
+
+    // write indices data
+    output.writeObject("Indices", _bufferData._data.get());
 }
 
 void BindIndexBuffer::dispatch(CommandBuffer& commandBuffer) const
 {
     vkCmdBindIndexBuffer(commandBuffer, *_bufferData._buffer, _bufferData._offset, _indexType);
+}
+
+void BindIndexBuffer::compile(Context& context)
+{
+    // check if already compiled
+    if (_bufferData._buffer) return;
+
+    auto bufferDataList = vsg::createBufferAndTransferData(context, {_bufferData._data}, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_SHARING_MODE_EXCLUSIVE);
+    if (!bufferDataList.empty())
+    {
+        _bufferData = bufferDataList.back();
+        _indexType = computeIndexType(_bufferData._data);
+    }
 }

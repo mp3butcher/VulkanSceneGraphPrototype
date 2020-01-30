@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/vk/Device.h>
+#include <vsg/vk/Fence.h>
 
 #include <set>
 
@@ -61,18 +62,43 @@ bool Device::vkCreate() {
             queueCreateInfo.pQueuePriorities = &queuePriority;
             _queueCreateInfos.push_back(queueCreateInfo);
         }
-    }
+}
+  /*  std::set<int> uniqueQueueFamiles;
+    if (physicalDevice->getGraphicsFamily() >= 0) uniqueQueueFamiles.insert(physicalDevice->getGraphicsFamily());
+    if (physicalDevice->getComputeFamily() >= 0) uniqueQueueFamiles.insert(physicalDevice->getComputeFamily());
+    if (physicalDevice->getPresentFamily() >= 0) uniqueQueueFamiles.insert(physicalDevice->getPresentFamily());
 
-    _deviceCreateInfo.queueCreateInfoCount = _queueCreateInfos.size();
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+
+    float queuePriority = 1.0f;
+    for (int queueFamily : uniqueQueueFamiles)
+    {
+        VkDeviceQueueCreateInfo queueCreateInfo = {};
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = queueFamily;
+        queueCreateInfo.queueCount = 1;
+        queueCreateInfo.pQueuePriorities = &queuePriority;
+        queueCreateInfo.pNext = nullptr;
+        queueCreateInfos.push_back(queueCreateInfo);
+>>>>>>> upstream/master
+    }*/
+
+    _deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(_queueCreateInfos.size());
     _deviceCreateInfo.pQueueCreateInfos = _queueCreateInfos.empty() ? nullptr : _queueCreateInfos.data();
 
     _deviceCreateInfo.pEnabledFeatures = &_deviceFeatures;
 
+
     _deviceCreateInfo.enabledExtensionCount = _deviceExtensions.size();
     _deviceCreateInfo.ppEnabledExtensionNames = _deviceExtensions.empty() ? nullptr : _deviceExtensions.data();
+/*
+    createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+    createInfo.pQueueCreateInfos = queueCreateInfos.empty() ? nullptr : queueCreateInfos.data();
+*/
 
     _deviceCreateInfo.enabledLayerCount = _layers.size();
     _deviceCreateInfo.ppEnabledLayerNames = _layers.empty() ? nullptr : _layers.data();
+
 
     VkResult result = vkCreateDevice(*_physicalDevice, &_deviceCreateInfo, _allocator, &_device);
     if (result != VK_SUCCESS) return false;
@@ -81,13 +107,41 @@ bool Device::vkCreate() {
     //they will be destroy at vkDestroyDevice call in Device destructor
 
     return true;
+/*
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+    createInfo.ppEnabledExtensionNames = deviceExtensions.empty() ? nullptr : deviceExtensions.data();
 
+    createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
+    createInfo.ppEnabledLayerNames = layers.empty() ? nullptr : layers.data();
+
+    createInfo.pNext = nullptr;
+
+    VkDevice device;
+    VkResult result = vkCreateDevice(*physicalDevice, &createInfo, allocator, &device);
+    if (result == VK_SUCCESS)
+    {
+        return Result(new Device(device, physicalDevice, allocator));
+    }
+    else
+    {
+        return Device::Result("Error: vsg::Device::create(...) failed to create logical device.", result);
+    }
+*/
 }
 
-VkQueue Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex)
+ref_ptr<Queue> Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex)
 {
-    VkQueue queue;
-    vkGetDeviceQueue(_device, queueFamilyIndex, queueIndex, &queue);
+    for (auto& queue : _queues)
+    {
+        if (queue->getQueueFamilyIndex() == queueFamilyIndex && queue->getIndex() == queueIndex) return queue;
+    }
+
+ /*  VkQueue vk_queue;
+    vkGetDeviceQueue(_device, queueFamilyIndex, queueIndex, &vk_queue);
+*/
+    ref_ptr<Queue> queue(new Queue(this, queueFamilyIndex, queueIndex));
+    _queues.emplace_back(queue);
+queue->vkUpdate();
     return queue;
 }/*
 Queue * Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex){
@@ -97,4 +151,39 @@ Queue * Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex){
 }
 */
 
+/*
+Queue::Queue(VkQueue queue, uint32_t queueFamilyIndex, uint32_t queueIndex) :
+    _vkQueue(queue),
+    _queueFamilyIndex(queueFamilyIndex),
+    _queueIndex(queueIndex)
+{
+}
+
+Queue::~Queue()
+{
+}*/
+
+VkResult Queue::submit(const std::vector<VkSubmitInfo>& submitInfos, Fence* fence)
+{
+    std::lock_guard<std::mutex> guard(_mutex);
+    return vkQueueSubmit(_queue, submitInfos.size(), submitInfos.data(), (fence == nullptr) ? VK_NULL_HANDLE : fence->fence());
+}
+
+VkResult Queue::submit(const VkSubmitInfo& submitInfo, Fence* fence)
+{
+    std::lock_guard<std::mutex> guard(_mutex);
+    return vkQueueSubmit(_queue, 1, &submitInfo, (fence == nullptr) ? VK_NULL_HANDLE : fence->fence());
+}
+
+VkResult Queue::present(const VkPresentInfoKHR& info)
+{
+    std::lock_guard<std::mutex> guard(_mutex);
+    return vkQueuePresentKHR(_queue, &info);
+}
+
+VkResult Queue::waitIdle()
+{
+    std::lock_guard<std::mutex> guard(_mutex);
+    return vkQueueWaitIdle(_queue);
+}
 

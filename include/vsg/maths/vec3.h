@@ -23,6 +23,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #    pragma clang diagnostic ignored "-Wnested-anon-types"
 #endif
 
+#include <vsg/core/type_name.h>
+
 #include <cmath>
 
 namespace vsg
@@ -57,6 +59,10 @@ namespace vsg
         constexpr t_vec3(value_type in_x, value_type in_y, value_type in_z) :
             value{in_x, in_y, in_z} {}
 
+        template<typename R>
+        constexpr explicit t_vec3(const t_vec3<R>& v) :
+            value{v.x, v.y, v.z} {}
+
         constexpr std::size_t size() const { return 3; }
 
         value_type& operator[](std::size_t i) { return value[i]; }
@@ -65,18 +71,34 @@ namespace vsg
         template<typename R>
         t_vec3& operator=(const t_vec3<R>& rhs)
         {
-            value[0] = rhs[0];
-            value[1] = rhs[1];
-            value[2] = rhs[2];
+            value[0] = static_cast<value_type>(rhs[0]);
+            value[1] = static_cast<value_type>(rhs[1]);
+            value[2] = static_cast<value_type>(rhs[2]);
             return *this;
         }
 
         T* data() { return value; }
         const T* data() const { return value; }
+
+        void set(value_type in_x, value_type in_y, value_type in_z)
+        {
+            x = in_x;
+            y = in_y;
+            z = in_z;
+        }
     };
 
     using vec3 = t_vec3<float>;
     using dvec3 = t_vec3<double>;
+    using ubvec3 = t_vec3<std::uint8_t>;
+    using usvec3 = t_vec3<std::uint16_t>;
+    using uivec3 = t_vec3<std::uint32_t>;
+
+    VSG_type_name(vsg::vec3);
+    VSG_type_name(vsg::dvec3);
+    VSG_type_name(vsg::ubvec3);
+    VSG_type_name(vsg::usvec3);
+    VSG_type_name(vsg::uivec3);
 
     template<typename T>
     constexpr t_vec3<T> operator-(t_vec3<T> const& lhs, t_vec3<T> const& rhs)
@@ -85,9 +107,28 @@ namespace vsg
     }
 
     template<typename T>
+    constexpr t_vec3<T> operator-(t_vec3<T> const& v)
+    {
+        return t_vec3<T>(-v[0], -v[1], -v[2]);
+    }
+
+    template<typename T>
     constexpr t_vec3<T> operator+(t_vec3<T> const& lhs, t_vec3<T> const& rhs)
     {
-        return t_vec3<T>(lhs[0] - rhs[0], lhs[1] - rhs[1], lhs[2] - rhs[2]);
+        return t_vec3<T>(lhs[0] + rhs[0], lhs[1] + rhs[1], lhs[2] + rhs[2]);
+    }
+
+    template<typename T>
+    constexpr t_vec3<T> operator*(t_vec3<T> const& lhs, T rhs)
+    {
+        return t_vec3<T>(lhs[0] * rhs, lhs[1] * rhs, lhs[2] * rhs);
+    }
+
+    template<typename T>
+    constexpr t_vec3<T> operator/(t_vec3<T> const& lhs, T rhs)
+    {
+        T inv = static_cast<T>(1.0) / rhs;
+        return t_vec3<T>(lhs[0] * inv, lhs[1] * inv, lhs[2] * inv);
     }
 
     template<typename T>
@@ -99,14 +140,14 @@ namespace vsg
     template<typename T>
     constexpr t_vec3<T> normalize(t_vec3<T> const& v)
     {
-        T inverse_len = 1.0 / length(v);
+        T inverse_len = static_cast<T>(1.0) / length(v);
         return t_vec3<T>(v[0] * inverse_len, v[1] * inverse_len, v[2] * inverse_len);
     }
 
     template<typename T>
     constexpr T dot(t_vec3<T> const& lhs, t_vec3<T> const& rhs)
     {
-        return lhs[0] * rhs[0] + lhs[1] * rhs[1] + lhs[2] - rhs[2];
+        return lhs[0] * rhs[0] + lhs[1] * rhs[1] + lhs[2] * rhs[2];
     }
 
     template<typename T>

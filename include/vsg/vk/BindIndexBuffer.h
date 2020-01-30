@@ -19,26 +19,53 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace vsg
 {
 
-    class VSG_DECLSPEC BindIndexBuffer : public Inherit<StateComponent, BindIndexBuffer>
+    /** Compute the VkIndexType from Data source's value size.*/
+    inline VkIndexType computeIndexType(Data* indices)
+    {
+        if (indices)
+        {
+            switch (indices->valueSize())
+            {
+            case (2): return VK_INDEX_TYPE_UINT16;
+            case (4): return VK_INDEX_TYPE_UINT32;
+            default: break;
+            }
+        }
+        // nothing valid assigned
+        return VK_INDEX_TYPE_MAX_ENUM;
+    }
+
+    class VSG_DECLSPEC BindIndexBuffer : public Inherit<Command, BindIndexBuffer>
     {
     public:
+        BindIndexBuffer() :
+            _indexType(VK_INDEX_TYPE_MAX_ENUM) {}
+
+        BindIndexBuffer(Data* indices);
+
+        BindIndexBuffer(const BufferData& bufferData);
+
         BindIndexBuffer(Buffer* buffer, VkDeviceSize offset, VkIndexType indexType) :
             _bufferData(buffer, offset, 0),
             _indexType(indexType) {}
 
-        BindIndexBuffer(const BufferData& bufferData, VkIndexType indexType) :
-            _bufferData(bufferData),
-            _indexType(indexType) {}
+        void setIndices(ref_ptr<Data> indices) { _bufferData._data = indices; }
+        Data* getIndices() { return _bufferData._data; }
+        const Data* getIndices() const { return _bufferData._data; }
 
-        void pushTo(State& state) const override;
-        void popFrom(State& state) const override;
+        void read(Input& input) override;
+        void write(Output& output) const override;
+
+        void compile(Context& context) override;
+
         void dispatch(CommandBuffer& commandBuffer) const override;
 
     protected:
-        virtual ~BindIndexBuffer() {}
+        virtual ~BindIndexBuffer();
 
         BufferData _bufferData;
         VkIndexType _indexType;
     };
+    VSG_type_name(vsg::BindIndexBuffer);
 
 } // namespace vsg

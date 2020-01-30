@@ -10,6 +10,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include <vsg/traversals/CompileTraversal.h>
 #include <vsg/vk/ShaderModule.h>
 
 using namespace vsg;
@@ -18,68 +19,105 @@ using namespace vsg;
 //
 // Shader
 //
-
-Shader::Shader(VkShaderStageFlagBits stage, const std::string& entryPointName, const Contents& contents) :
-    _stage(stage),
-    _entryPointName(entryPointName),
-    _contents(contents)
+ShaderModule::ShaderModule()
 {
 }
 
-Shader::~Shader()
+ShaderModule::ShaderModule(const Source& source) :
+    _source(source)
 {
 }
 
-Shader::Result Shader::read(VkShaderStageFlagBits stage, const std::string& entryPointName, const std::string& filename)
+ShaderModule::ShaderModule(const SPIRV& spirv) :
+    _spirv(spirv)
 {
-    Contents buffer;
-    if (readFile(buffer, filename))
-    {
-        return Result(new Shader(stage, entryPointName, buffer));
-    }
-    else
-    {
-        return Shader::Result("Error: vsg::Shader::read(..) failed to read shader file.", VK_INCOMPLETE);
-    }
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//
-// ShaderModule
-//
-ShaderModule::ShaderModule(VkShaderModule shaderModule, Device* device, Shader* shader, AllocationCallbacks* allocator) :
-    _shaderModule(shaderModule),
-    _device(device),
-    _shader(shader),
-    _allocator(allocator)
+ShaderModule::ShaderModule(const Source& source, const SPIRV& spirv) :
+    _source(source),
+    _spirv(spirv)
 {
 }
 
 ShaderModule::~ShaderModule()
 {
-    if (_shaderModule)
+}
+
+ShaderModule::Result ShaderModule::read(const std::string& filename)
+{
+    SPIRV buffer;
+    if (readFile(buffer, filename))
     {
-        vkDestroyShaderModule(*_device, _shaderModule, _allocator);
+        return Result(new ShaderModule(buffer));
+    }
+    else
+    {
+        return ShaderModule::Result("Error: vsg::ShaderModule::read(..) failed to read shader file.", VK_INCOMPLETE);
     }
 }
 
-ShaderModule::Result ShaderModule::create(Device* device, Shader* shader, AllocationCallbacks* allocator)
+void ShaderModule::read(Input& input)
 {
-    if (!device || !shader)
+    Object::read(input);
+
+    input.read("Source", _source);
+
+    _spirv.resize(input.readValue<uint32_t>("SPIRVSize"));
+    input.matchPropertyName("SPIRV");
+    input.read(_spirv.size(), _spirv.data());
+}
+
+void ShaderModule::write(Output& output) const
+{
+    Object::write(output);
+
+    output.write("Source", _source);
+
+    output.writeValue<uint32_t>("SPIRVSize", _spirv.size());
+    output.writePropertyName("SPIRV");
+    output.write(_spirv.size(), _spirv.data());
+}
+
+void ShaderModule::compile(Context& context)
+{
+    if (!_implementation) _implementation = Implementation::create(context.device, this);
+}
+
+ShaderModule::Implementation::Implementation(VkShaderModule shaderModule, Device* device, AllocationCallbacks* allocator) :
+    _shaderModule(shaderModule),
+    _device(device),
+    _allocator(allocator)
+{
+}
+
+ShaderModule::Implementation::~Implementation()
+{
+    vkDestroyShaderModule(*_device, _shaderModule, _allocator);
+}
+
+ShaderModule::Implementation::Result ShaderModule::Implementation::create(Device* device, ShaderModule* shaderModule, AllocationCallbacks* allocator)
+{
+    if (!device || !shaderModule)
     {
-        return Result("Error: vsg::ShaderModule::create(...) failed to create logical device, or Shader.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
+        return Result("Error: vsg::ShaderModule::create(...) failed, requires valid logical device and Shader.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
+    }
+
+    if (shaderModule->spirv().empty())
+    {
+        return Result("Error: vsg::ShaderModule::create(...) failed. requires Shader with valid spirv contents.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
     }
 
     VkShaderModuleCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    createInfo.codeSize = shader->contents().size();
-    createInfo.pCode = reinterpret_cast<const uint32_t*>(shader->contents().data());
+    createInfo.codeSize = shaderModule->spirv().size() * sizeof(ShaderModule::SPIRV::value_type);
+    createInfo.pCode = shaderModule->spirv().data();
+    createInfo.pNext = nullptr;
 
-    VkShaderModule shaderModule;
-    VkResult result = vkCreateShaderModule(*device, &createInfo, allocator, &shaderModule);
+    VkShaderModule sm;
+    VkResult result = vkCreateShaderModule(*device, &createInfo, allocator, &sm);
     if (result == VK_SUCCESS)
     {
-        return Result(new ShaderModule(shaderModule, device, shader, allocator));
+        return Result(new ShaderModule::Implementation(sm, device, allocator));
     }
     else
     {

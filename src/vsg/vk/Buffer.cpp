@@ -12,23 +12,40 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include <vsg/vk/Buffer.h>
 
+#include <iostream>
+
+#define REPORT_STATS 0
+
 using namespace vsg;
 
-Buffer::Buffer(VkBuffer buffer, VkBufferUsageFlags usage, VkSharingMode sharingMode, Device* device, AllocationCallbacks* allocator) :
+Buffer::Buffer(VkBuffer buffer, VkDeviceSize size, VkBufferUsageFlags usage, VkSharingMode sharingMode, Device* device, AllocationCallbacks* allocator) :
     _buffer(buffer),
     _usage(usage),
     _sharingMode(sharingMode),
     _device(device),
-    _allocator(allocator)
+    _allocator(allocator),
+    _memorySlots(size)
 {
 }
 
 Buffer::~Buffer()
 {
+#if REPORT_STATS
+    std::cout << "start of Buffer::~Buffer() " << this << std::endl;
+#endif
+
     if (_buffer)
     {
         vkDestroyBuffer(*_device, _buffer, _allocator);
     }
+
+    if (_deviceMemory)
+    {
+        _deviceMemory->release(_memoryOffset, _memorySlots.totalMemorySize());
+    }
+#if REPORT_STATS
+    std::cout << "end of Buffer::~Buffer() " << this << std::endl;
+#endif
 }
 
 Buffer::Result Buffer::create(Device* device, VkDeviceSize size, VkBufferUsageFlags usage, VkSharingMode sharingMode, AllocationCallbacks* allocator)
@@ -48,7 +65,7 @@ Buffer::Result Buffer::create(Device* device, VkDeviceSize size, VkBufferUsageFl
     VkResult result = vkCreateBuffer(*device, &bufferInfo, allocator, &buffer);
     if (result == VK_SUCCESS)
     {
-        return Result(new Buffer(buffer, usage, sharingMode, device, allocator));
+        return Result(new Buffer(buffer, size, usage, sharingMode, device, allocator));
     }
     else
     {

@@ -12,9 +12,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
-#include <vsg/vk/Framebuffer.h>
-#include <vsg/vk/RenderPass.h>
-#include <vsg/vk/State.h>
+#include <vsg/vk/Stage.h>
+
+#include <vsg/io/DatabasePager.h>
+
+#include <vsg/viewer/Camera.h>
 
 namespace vsg
 {
@@ -22,12 +24,20 @@ namespace vsg
     class VSG_DECLSPEC GraphicsStage : public Inherit<Stage, GraphicsStage>
     {
     public:
-        GraphicsStage(ref_ptr<Node> commandGraph);
+        GraphicsStage(ref_ptr<Node> commandGraph, ref_ptr<Camera> camera = ref_ptr<Camera>());
 
+        ref_ptr<Camera> _camera;
         ref_ptr<Node> _commandGraph;
+        ref_ptr<dmat4Value> _projMatrix;
+        ref_ptr<dmat4Value> _viewMatrix;
+        ref_ptr<ViewportState> _viewport;
 
-        void populateCommandBuffer(CommandBuffer* commandBuffer, Framebuffer* framebuffer, RenderPass* renderPass,
-                                   const VkExtent2D& extent2D, const VkClearColorValue& clearColor) override;
+        ref_ptr<DatabasePager> databasePager;
+
+        VkExtent2D _extent2D;
+        uint32_t _maxSlot = 2;
+
+        void populateCommandBuffer(CommandBuffer* commandBuffer, Framebuffer* framebuffer, RenderPass* renderPass, const VkExtent2D& extent2D, const VkClearColorValue& clearColor, ref_ptr<FrameStamp> frameStamp) override;
     };
 
 } // namespace vsg

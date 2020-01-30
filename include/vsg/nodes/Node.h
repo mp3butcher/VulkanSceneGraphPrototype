@@ -19,9 +19,13 @@ namespace vsg
     class VSG_DECLSPEC Node : public Inherit<Object, Node>
     {
     public:
-        Node();
+        Node(Allocator* allocator = nullptr);
+
+        const char* className() const noexcept override { return "vsg::Node"; }
 
     protected:
         virtual ~Node();
     };
+    VSG_type_name(vsg::Node);
+
 } // namespace vsg

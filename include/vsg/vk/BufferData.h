@@ -13,32 +13,53 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/vk/Buffer.h>
-#include <vsg/vk/CommandPool.h>
+#include <vsg/vk/Command.h>
 
 #include <cstring>
 
 namespace vsg
 {
+    // forward declare
+    class Context;
+    class CommandBuffer;
+
     class BufferData
     {
     public:
+        BufferData() = default;
+
         BufferData(Buffer* buffer, VkDeviceSize offset, VkDeviceSize range, Data* data = nullptr) :
             _buffer(buffer),
             _offset(offset),
             _range(range),
             _data(data) {}
 
+        BufferData(const BufferData&) = default;
+
+        BufferData& operator=(const BufferData&) = default;
+
+        void release()
+        {
+            if (_buffer)
+            {
+                _buffer->release(_offset, _range);
+            }
+
+            _buffer = 0;
+            _offset = 0;
+            _range = 0;
+        }
+
         ref_ptr<Buffer> _buffer;
-        VkDeviceSize _offset;
-        VkDeviceSize _range;
+        VkDeviceSize _offset = 0;
+        VkDeviceSize _range = 0;
         ref_ptr<Data> _data;
     };
 
     using BufferDataList = std::vector<BufferData>;
+    using DataList = std::vector<ref_ptr<Data>>;
 
-    typedef std::vector<ref_ptr<Data>> DataList;
-
-    BufferDataList createBufferAndTransferData(Device* device, CommandPool* commandPool, VkQueue graphicsQueue, const DataList& dataList, VkBufferUsageFlags usage, VkSharingMode sharingMode);
+    BufferDataList createBufferAndTransferData(Context& context, const DataList& dataList, VkBufferUsageFlags usage, VkSharingMode sharingMode);
 
     BufferDataList createHostVisibleBuffer(Device* device, const DataList& dataList, VkBufferUsageFlags usage, VkSharingMode sharingMode);
 

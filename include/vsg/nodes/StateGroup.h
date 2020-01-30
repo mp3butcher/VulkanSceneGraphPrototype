@@ -13,58 +13,59 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/nodes/Group.h>
+#include <vsg/vk/Command.h>
+#include <vsg/vk/Descriptor.h>
+#include <vsg/vk/DescriptorSet.h>
+
+#include <vsg/traversals/CompileTraversal.h>
+
+#include <algorithm>
 
 namespace vsg
 {
     // forward declare
-    class State;
     class CommandBuffer;
-
-    class StateComponent : public Inherit<Object, StateComponent>
-    {
-    public:
-        StateComponent() {}
-
-        virtual void pushTo(State& state) const = 0;
-        virtual void popFrom(State& state) const = 0;
-
-        virtual void dispatch(CommandBuffer& commandBuffer) const = 0;
-
-    protected:
-        virtual ~StateComponent() {}
-    };
 
     class VSG_DECLSPEC StateGroup : public Inherit<Group, StateGroup>
     {
     public:
-        StateGroup();
+        StateGroup(Allocator* allocator = nullptr);
 
-        using StateComponents = std::vector<ref_ptr<StateComponent>>;
+        void read(Input& input) override;
+        void write(Output& output) const override;
 
-#if 1
-        void add(ref_ptr<StateComponent> component)
-        {
-            _stateComponents.push_back(component);
-        }
-#else
-        void add(StateComponent* component)
-        {
-            _stateComponents.push_back(component);
-        }
-#endif
+        using StateCommands = std::vector<ref_ptr<StateCommand>>;
 
-        inline void pushTo(State& state) const
+        StateCommands& getStateCommands() { return _stateCommands; }
+        const StateCommands& getStateCommands() const { return _stateCommands; }
+
+        template<class T>
+        bool contains(const T value) const
         {
-            for (auto& component : _stateComponents) component->pushTo(state);
+            return std::find(_stateCommands.begin(), _stateCommands.end(), value) != _stateCommands.end();
         }
-        inline void popFrom(State& state) const
+
+        void add(ref_ptr<StateCommand> stateCommand)
         {
-            for (auto& component : _stateComponents) component->popFrom(state);
+            _stateCommands.push_back(stateCommand);
         }
+
+        template<class T>
+        void remove(const T value)
+        {
+            if (auto itr = std::find(_stateCommands.begin(), _stateCommands.end(), value); itr != _stateCommands.end())
+            {
+                _stateCommands.erase(itr);
+            }
+        }
+
+        virtual void compile(Context& context);
 
     protected:
         virtual ~StateGroup();
 
-        StateComponents _stateComponents;
+        StateCommands _stateCommands;
     };
+    VSG_type_name(vsg::StateGroup);
+
 } // namespace vsg

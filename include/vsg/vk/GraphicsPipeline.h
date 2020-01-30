@@ -13,10 +13,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 </editor-fold> */
 
 #include <vsg/vk/Command.h>
-#include <vsg/vk/Pipeline.h>
 #include <vsg/vk/PipelineLayout.h>
 #include <vsg/vk/RenderPass.h>
-#include <vsg/vk/ShaderModule.h>
+#include <vsg/vk/ShaderStage.h>
 
 namespace vsg
 {
@@ -30,59 +29,111 @@ namespace vsg
 
         virtual void apply(VkGraphicsPipelineCreateInfo& pipelineInfo) const = 0;
 
+        // compile the Vulkan object, context parameter used for Device
+        virtual void compile(Context& /*context*/) {}
+
+        // remove the local reference to the Vulkan implementation
+        virtual void release() {}
+
     protected:
         virtual ~GraphicsPipelineState() {}
     };
+    VSG_type_name(vsg::GraphicsPipelineState);
 
     using GraphicsPipelineStates = std::vector<ref_ptr<GraphicsPipelineState>>;
 
-    class VSG_DECLSPEC GraphicsPipeline : public Inherit<Pipeline, GraphicsPipeline>
+    class VSG_DECLSPEC GraphicsPipeline : public Inherit<Object, GraphicsPipeline>
     {
     public:
-        using Result = vsg::Result<GraphicsPipeline, VkResult, VK_SUCCESS>;
+        GraphicsPipeline();
 
-        /** Crreate a GraphicsPipeline.*/
-        static Result create(Device* device, RenderPass* renderPass, PipelineLayout* pipelineLayout, const GraphicsPipelineStates& pipelineStates, AllocationCallbacks* allocator = nullptr);
+        GraphicsPipeline(PipelineLayout* pipelineLayout, const ShaderStages& shaderStages, const GraphicsPipelineStates& pipelineStates, AllocationCallbacks* allocator = nullptr);
+
+        void read(Input& input) override;
+        void write(Output& output) const override;
+
+        PipelineLayout* getPipelineLayout() { return _pipelineLayout; }
+        const PipelineLayout* getPipelineLayout() const { return _pipelineLayout; }
+
+        ShaderStages& getShaderStages() { return _shaderStages; }
+        const ShaderStages& getShaderStages() const { return _shaderStages; }
+
+        GraphicsPipelineStates& getPipelineStates() { return _pipelineStates; }
+        const GraphicsPipelineStates& getPipelineStates() const { return _pipelineStates; }
+
+        class VSG_DECLSPEC Implementation : public Inherit<Object, Implementation>
+        {
+        public:
+            Implementation(VkPipeline pipeline, Device* device, RenderPass* renderPass, PipelineLayout* pipelineLayout, const ShaderStages& shaderStages, const GraphicsPipelineStates& pipelineStates, AllocationCallbacks* allocator = nullptr);
+            virtual ~Implementation();
+
+            using Result = vsg::Result<Implementation, VkResult, VK_SUCCESS>;
+
+            /** Create a GraphicsPipeline.*/
+            static Result create(Device* device, RenderPass* renderPass, PipelineLayout* pipelineLayout, const ShaderStages& shaderStages, const GraphicsPipelineStates& pipelineStates, AllocationCallbacks* allocator = nullptr);
+
+            VkPipeline _pipeline;
+
+            // TODO need to convert to use Implementation versions of RenderPass and PipelineLayout
+            ref_ptr<Device> _device;
+            ref_ptr<RenderPass> _renderPass;
+            ref_ptr<PipelineLayout> _pipelineLayout;
+            ShaderStages _shaderStages;
+            GraphicsPipelineStates _pipelineStates;
+            ref_ptr<AllocationCallbacks> _allocator;
+        };
+
+        // get the Vulkan GrphicsPipeline::Implementation
+        Implementation* getImplementation() { return _implementation; }
+        const Implementation* getImplementation() const { return _implementation; }
+
+        // compile the Vulkan object, context parameter used for Device
+        void compile(Context& context);
+
+        // remove the local reference to the Vulkan implementation
+        void release() { _implementation = nullptr; }
+
+        operator VkPipeline() const { return _implementation->_pipeline; }
 
     protected:
-        GraphicsPipeline(VkPipeline pipeline, Device* device, RenderPass* renderPass, PipelineLayout* pipelineLayout, const GraphicsPipelineStates& pipelineStates, AllocationCallbacks* allocator);
-
         virtual ~GraphicsPipeline();
 
+        ref_ptr<Device> _device;
         ref_ptr<RenderPass> _renderPass;
+        ref_ptr<PipelineLayout> _pipelineLayout;
+        ShaderStages _shaderStages;
         GraphicsPipelineStates _pipelineStates;
-    };
+        ref_ptr<AllocationCallbacks> _allocator;
 
-    class VSG_DECLSPEC ShaderStages : public Inherit<GraphicsPipelineState, ShaderStages>
+        ref_ptr<Implementation> _implementation;
+    };
+    VSG_type_name(vsg::GraphicsPipeline);
+
+    class VSG_DECLSPEC BindGraphicsPipeline : public Inherit<StateCommand, BindGraphicsPipeline>
     {
     public:
-        ShaderStages(const ShaderModules& shaderModules);
+        BindGraphicsPipeline(GraphicsPipeline* pipeline = nullptr);
 
-        VkStructureType getType() const override { return VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO; }
+        void read(Input& input) override;
+        void write(Output& output) const override;
 
-        void setShaderModules(const ShaderModules& shaderModules)
-        {
-            _shaderModules = shaderModules;
-            update();
-        }
-        const ShaderModules& getShaderModules() const { return _shaderModules; }
+        void setPipeline(GraphicsPipeline* pipeline) { _pipeline = pipeline; }
+        GraphicsPipeline* getPipeline() { return _pipeline; }
+        const GraphicsPipeline* getPipeline() const { return _pipeline; }
 
-        void update();
+        void dispatch(CommandBuffer& commandBuffer) const override;
 
-        std::size_t size() const { return _stages.size(); }
+        // compile the Vulkan object, context parameter used for Device
+        void compile(Context& context) override;
 
-        VkPipelineShaderStageCreateInfo* data() { return _stages.data(); }
-        const VkPipelineShaderStageCreateInfo* data() const { return _stages.data(); }
+        virtual void release();
 
-        void apply(VkGraphicsPipelineCreateInfo& pipelineInfo) const override;
+    public:
+        virtual ~BindGraphicsPipeline();
 
-    protected:
-        virtual ~ShaderStages();
-
-        using Stages = std::vector<VkPipelineShaderStageCreateInfo>;
-        Stages _stages;
-        ShaderModules _shaderModules;
+        ref_ptr<GraphicsPipeline> _pipeline;
     };
+    VSG_type_name(vsg::BindGraphicsPipeline);
 
     class VSG_DECLSPEC VertexInputState : public Inherit<GraphicsPipelineState, VertexInputState>, public VkPipelineVertexInputStateCreateInfo
     {
@@ -92,6 +143,9 @@ namespace vsg
 
         VertexInputState();
         VertexInputState(const Bindings& bindings, const Attributes& attributes);
+
+        void read(Input& input) override;
+        void write(Output& output) const override;
 
         VkStructureType getType() const override { return sType; }
 
@@ -104,14 +158,21 @@ namespace vsg
     protected:
         virtual ~VertexInputState();
 
+        void _assign();
+
         Bindings _bindings;
         Attributes _attributes;
     };
+    VSG_type_name(vsg::VertexInputState);
 
     class VSG_DECLSPEC InputAssemblyState : public Inherit<GraphicsPipelineState, InputAssemblyState>, public VkPipelineInputAssemblyStateCreateInfo
     {
     public:
         InputAssemblyState();
+        InputAssemblyState(VkPrimitiveTopology primitiveTopology, bool enablePrimitiveRestart = false);
+
+        void read(Input& input) override;
+        void write(Output& output) const override;
 
         VkStructureType getType() const override { return sType; }
 
@@ -120,10 +181,12 @@ namespace vsg
     protected:
         virtual ~InputAssemblyState();
     };
+    VSG_type_name(vsg::InputAssemblyState);
 
     class VSG_DECLSPEC ViewportState : public Inherit<GraphicsPipelineState, ViewportState>, public VkPipelineViewportStateCreateInfo
     {
     public:
+        ViewportState();
         ViewportState(const VkExtent2D& extent);
 
         VkStructureType getType() const override { return sType; }
@@ -139,6 +202,7 @@ namespace vsg
         VkViewport _viewport;
         VkRect2D _scissor;
     };
+    VSG_type_name(vsg::ViewportState);
 
     class VSG_DECLSPEC RasterizationState : public Inherit<GraphicsPipelineState, RasterizationState>, public VkPipelineRasterizationStateCreateInfo
     {
@@ -152,6 +216,7 @@ namespace vsg
     protected:
         virtual ~RasterizationState();
     };
+    VSG_type_name(vsg::RasterizationState);
 
     class VSG_DECLSPEC MultisampleState : public Inherit<GraphicsPipelineState, MultisampleState>, public VkPipelineMultisampleStateCreateInfo
     {
@@ -165,11 +230,15 @@ namespace vsg
     protected:
         virtual ~MultisampleState();
     };
+    VSG_type_name(vsg::MultisampleState);
 
     class VSG_DECLSPEC DepthStencilState : public Inherit<GraphicsPipelineState, DepthStencilState>, public VkPipelineDepthStencilStateCreateInfo
     {
     public:
         DepthStencilState();
+
+        void read(Input& input) override;
+        void write(Output& output) const override;
 
         VkStructureType getType() const override { return sType; }
 
@@ -178,18 +247,29 @@ namespace vsg
     protected:
         virtual ~DepthStencilState();
     };
+    VSG_type_name(vsg::DepthStencilState);
 
     class VSG_DECLSPEC ColorBlendState : public Inherit<GraphicsPipelineState, ColorBlendState>, public VkPipelineColorBlendStateCreateInfo
     {
     public:
+        using ColorBlendAttachments = std::vector<VkPipelineColorBlendAttachmentState>;
+
         ColorBlendState();
+        ColorBlendState(const ColorBlendAttachments& colorBlendAttachments);
+
+        void read(Input& input) override;
+        void write(Output& output) const override;
 
         VkStructureType getType() const override { return sType; }
 
         void apply(VkGraphicsPipelineCreateInfo& pipelineInfo) const override;
 
-        using ColorBlendAttachments = std::vector<VkPipelineColorBlendAttachmentState>;
         const ColorBlendAttachments& getColorBlendAttachments() const { return _colorBlendAttachments; }
+        void setColorBlendAttachments(const ColorBlendAttachments& colorBlendAttachments)
+        {
+            _colorBlendAttachments = colorBlendAttachments;
+            update();
+        }
 
         void update();
 
@@ -198,5 +278,6 @@ namespace vsg
 
         ColorBlendAttachments _colorBlendAttachments;
     };
+    VSG_type_name(vsg::ColorBlendState);
 
 } // namespace vsg

@@ -15,8 +15,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <vsg/vk/BindIndexBuffer.h>
 #include <vsg/vk/BindVertexBuffers.h>
 #include <vsg/vk/CommandBuffer.h>
+#include <vsg/vk/ComputePipeline.h>
 #include <vsg/vk/DescriptorSet.h>
-#include <vsg/vk/Pipeline.h>
+#include <vsg/vk/GraphicsPipeline.h>
 #include <vsg/vk/PushConstants.h>
 
 #include <map>
@@ -24,6 +25,10 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 namespace vsg
 {
+
+#define USE_DOUBLE_MATRIX_STACK 1
+#define POLYTOPE_SIZE 5
+
     template<class T>
     class StateStack
     {
@@ -35,15 +40,16 @@ namespace vsg
         Stack stack;
         bool dirty;
 
-        void push(const T* value)
+        template<class R>
+        inline void push(ref_ptr<R> value)
         {
-            stack.push(ref_ptr<const T>(value));
+            stack.push(value);
             dirty = true;
         }
-        void pop()
+        inline void pop()
         {
             stack.pop();
-            dirty = true;
+            dirty = !stack.empty();
         }
         size_t size() const { return stack.size(); }
         T& top() { return stack.top(); }
@@ -51,9 +57,110 @@ namespace vsg
 
         inline void dispatch(CommandBuffer& commandBuffer)
         {
-            if (dirty && !stack.empty())
+            if (dirty)
             {
                 stack.top()->dispatch(commandBuffer);
+                dirty = false;
+            }
+        }
+    };
+
+    class MatrixStack
+    {
+    public:
+        MatrixStack(uint32_t in_offset = 0) :
+            offset(in_offset)
+        {
+            // make sure there is an initial matrix
+            matrixStack.emplace(mat4());
+            dirty = true;
+        }
+
+#if USE_DOUBLE_MATRIX_STACK
+        using value_type = double;
+        using alternative_type = float;
+#else
+        using value_type = float;
+        using alternative_type = double;
+#endif
+
+        using Matrix = t_mat4<value_type>;
+        using AlternativeMatrix = t_mat4<alternative_type>;
+
+        std::stack<Matrix> matrixStack;
+        VkShaderStageFlags stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        uint32_t offset = 0;
+        bool dirty = false;
+
+        inline void set(const mat4& matrix)
+        {
+            matrixStack = {};
+            matrixStack.emplace(matrix);
+            dirty = true;
+        }
+
+        inline void set(const dmat4& matrix)
+        {
+            matrixStack = {};
+            matrixStack.emplace(matrix);
+            dirty = true;
+        }
+
+        inline void push(const mat4& matrix)
+        {
+            matrixStack.emplace(matrix);
+            dirty = true;
+        }
+        inline void push(const dmat4& matrix)
+        {
+            matrixStack.emplace(matrix);
+            dirty = true;
+        }
+
+        inline void pushAndPosMult(const Matrix& matrix)
+        {
+            matrixStack.emplace(matrixStack.top() * matrix);
+            dirty = true;
+        }
+
+        inline void pushAndPosMult(const AlternativeMatrix& matrix)
+        {
+            matrixStack.emplace(matrixStack.top() * Matrix(matrix));
+            dirty = true;
+        }
+
+        inline void pushAndPreMult(const Matrix& matrix)
+        {
+            matrixStack.emplace(matrixStack.top() * matrix);
+            dirty = true;
+        }
+
+        inline void pushAndPreMult(const AlternativeMatrix& matrix)
+        {
+            matrixStack.emplace(matrixStack.top() * Matrix(matrix));
+            dirty = true;
+        }
+
+        const Matrix& top() const { return matrixStack.top(); }
+
+        inline void pop()
+        {
+            matrixStack.pop();
+            dirty = true;
+        }
+
+        inline void dispatch(CommandBuffer& commandBuffer)
+        {
+            if (dirty)
+            {
+#if USE_DOUBLE_MATRIX_STACK
+                // make sure matrix is a float matrix.
+                mat4 newmatrix(matrixStack.top());
+                vkCmdPushConstants(commandBuffer, commandBuffer.getCurrentPipelineLayout(), stageFlags, offset, sizeof(newmatrix), newmatrix.data());
+#else
+
+                vkCmdPushConstants(commandBuffer, commandBuffer.getCurrentPipelineLayout(), stageFlags, offset, sizeof(Matrix), matrixStack.top().data());
+#endif
                 dirty = false;
             }
         }
@@ -62,42 +169,134 @@ namespace vsg
     class State : public Inherit<Object, State>
     {
     public:
-        State() :
-            dirty(false) {}
+        explicit State(CommandBuffer* commandBuffer, uint32_t maxSlot) :
+            _commandBuffer(commandBuffer),
+            dirty(false),
+            stateStacks(maxSlot + 1)
+        {
+#if POLYTOPE_SIZE == 4
+            _frustumUnit = Polytope{{
+                Plane(1.0, 0.0, 0.0, 1.0),  // left plane
+                Plane(-1.0, 0.0, 0.0, 1.0), // right plane
+                Plane(0.0, 1.0, 0.0, 1.0),  // bottom plane
+                Plane(0.0, -1.0, 0.0, 1.0)  // top plane
+            }};
+#elif POLYTOPE_SIZE == 5
+            _frustumUnit = Polytope{{
+                Plane(1.0, 0.0, 0.0, 1.0),  // left plane
+                Plane(-1.0, 0.0, 0.0, 1.0), // right plane
+                Plane(0.0, 1.0, 0.0, 1.0),  // bottom plane
+                Plane(0.0, -1.0, 0.0, 1.0), // top plane
+                Plane(0.0, 0.0, -1.0, 1.0)  // far plane
+            }};
+#elif POLYTOPE_SIZE == 6
+            _frustumUnit = Polytope{{
+                Plane(1.0, 0.0, 0.0, 1.0),  // left plane
+                Plane(-1.0, 0.0, 0.0, 1.0), // right plane
+                Plane(0.0, 1.0, 0.0, 1.0),  // bottom plane
+                Plane(0.0, -1.0, 0.0, 1.0), // top plane
+                Plane(0.0, 0.0, -1.0, 1.0), // far plane
+                Plane(0.0, 0.0, 1.0, 1.0)   // near plane
+            }};
+#endif
+        }
 
-        using PushConstantsMap = std::map<uint32_t, StateStack<PushConstants>>;
+        using value_type = MatrixStack::value_type;
+        using Plane = t_plane<value_type>;
+
+        using Polytope = std::array<Plane, POLYTOPE_SIZE>;
+        using StateStacks = std::vector<StateStack<StateCommand>>;
+
+        ref_ptr<CommandBuffer> _commandBuffer;
+
+        Polytope _frustumUnit;
+        Polytope _frustumProjected;
+
+        using PolytopeStack = std::stack<Polytope>;
+        PolytopeStack _frustumStack;
 
         bool dirty;
-        StateStack<BindPipeline> pipelineStack;
-        StateStack<BindDescriptorSets> descriptorStack;
-        StateStack<BindVertexBuffers> vertexBuffersStack;
-        StateStack<BindIndexBuffer> indexBufferStack;
-        PushConstantsMap pushConstantsMap;
 
-        inline void dispatch(CommandBuffer& commandBuffer)
+        StateStacks stateStacks;
+
+        MatrixStack projectionMatrixStack{0};
+        MatrixStack modelviewMatrixStack{64};
+
+        void setProjectionAndViewMatrix(const dmat4& projMatrix, const dmat4& viewMatrix)
+        {
+            projectionMatrixStack.set(projMatrix);
+
+            const auto& proj = projectionMatrixStack.top();
+
+            _frustumProjected[0] = _frustumUnit[0] * proj;
+            _frustumProjected[1] = _frustumUnit[1] * proj;
+            _frustumProjected[2] = _frustumUnit[2] * proj;
+            _frustumProjected[3] = _frustumUnit[3] * proj;
+#if POLYTOPE_SIZE >= 5
+            _frustumProjected[4] = _frustumUnit[4] * proj;
+#elif POLYTOPE_SIZE >= 6
+            _frustumProjected[5] = _frustumUnit[5] * proj;
+#endif
+
+            modelviewMatrixStack.set(viewMatrix);
+
+            // clear frustum stack
+            while (!_frustumStack.empty()) _frustumStack.pop();
+
+            // push frustum in world coords
+            pushFrustum();
+        }
+
+        inline void dispatch()
         {
             if (dirty)
             {
-                pipelineStack.dispatch(commandBuffer);
-                descriptorStack.dispatch(commandBuffer);
-                vertexBuffersStack.dispatch(commandBuffer);
-                indexBufferStack.dispatch(commandBuffer);
-                for (auto& pushConstantsStack : pushConstantsMap)
+                for (auto& stateStack : stateStacks)
                 {
-                    pushConstantsStack.second.dispatch(commandBuffer);
+                    stateStack.dispatch(*_commandBuffer);
                 }
+
+                projectionMatrixStack.dispatch(*_commandBuffer);
+                modelviewMatrixStack.dispatch(*_commandBuffer);
+
                 dirty = false;
             }
         }
+
+        inline void pushFrustum()
+        {
+            const auto mv = modelviewMatrixStack.top();
+#if POLYTOPE_SIZE == 4
+            _frustumStack.push(Polytope{{ _frustumProjected[0] * mv,
+                                          _frustumProjected[1] * mv,
+                                          _frustumProjected[2] * mv,
+                                          _frustumProjected[3] * mv }});
+#elif POLYTOPE_SIZE == 5
+            _frustumStack.push(Polytope{{ _frustumProjected[0] * mv,
+                                          _frustumProjected[1] * mv,
+                                          _frustumProjected[2] * mv,
+                                          _frustumProjected[3] * mv,
+                                          _frustumProjected[4] * mv }});
+#elif POLYTOPE_SIZE == 6
+            _frustumStack.push(Polytope{{_frustumProjected[0] * mv,
+                                         _frustumProjected[1] * mv,
+                                         _frustumProjected[2] * mv,
+                                         _frustumProjected[3] * mv,
+                                         _frustumProjected[4] * mv,
+                                         _frustumProjected[5] * mv}});
+#endif
+        }
+
+        inline void popFrustum()
+        {
+            _frustumStack.pop();
+        }
+
+        template<typename T>
+        bool intersect(t_sphere<T> const& s)
+        {
+            return vsg::intersect(_frustumStack.top(), s);
+        }
     };
 
-    class Framebuffer;
-    class Renderpass;
-    class Stage : public Inherit<Object, Stage>
-    {
-    public:
-        Stage() {}
-
-        virtual void populateCommandBuffer(CommandBuffer* commandBuffer, Framebuffer* framebuffer, RenderPass* renderPass, const VkExtent2D& extent, const VkClearColorValue& clearColor) = 0;
-    };
 } // namespace vsg

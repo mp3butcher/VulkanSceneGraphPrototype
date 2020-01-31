@@ -28,14 +28,14 @@ namespace vsg
         Device(PhysicalDevice* physicalDevice=nullptr, AllocationCallbacks* allocator=nullptr);
 
         //safe get
-       // Device* get(){vkUpdate();return this; }
+       // Device* get() {vkUpdate();return this; }
 
         inline const VkDeviceCreateFlags& getDeviceCreateFlags() const { return _deviceCreateInfo.flags; }
         inline void setDeviceCreateFlags(const VkDeviceCreateFlags&f) {if(_deviceCreateInfo.flags==f)return; _deviceCreateInfo.flags=f; vkDirty(); }
 
         inline const VkDeviceQueueCreateInfo& getQueueInfo(const ushort i) const { return _queueCreateInfos[i]; }
         void setQueueInfo(const ushort i,const VkDeviceQueueCreateInfo& q) {// if(_queueCreateInfos[i]==q)return;
-            _queueCreateInfos[i]=q;vkDirty(); }
+            _queueCreateInfos[i]=q; vkDirty(); }
 
         inline const VkPhysicalDeviceFeatures& getdeviceFeatures() const { return *_deviceCreateInfo.pEnabledFeatures; }
         inline void setdeviceFeatures(const VkPhysicalDeviceFeatures&f) {//if(*_deviceCreateInfo.pEnabledFeatures==f)return;
@@ -56,9 +56,9 @@ namespace vsg
        ///assert !vkDirty for the following
         operator VkDevice() const { return _device; }
         VkDevice getDevice() const { return _device; }
-         Queue * getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex=0);
+        //   Queue * getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex=0);
         //VkQueue getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex = 0);
-       // ref_ptr<Queue> getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex = 0);
+      ref_ptr<Queue> getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex = 0);
 /*=======
 
 >>>>>>> upstream/master*/

@@ -71,8 +71,9 @@ bool PhysicalDevice::vkCreate() {
 
     }
 
+    VkResult vkRes;
     uint32_t queueFamilyCount = 0;
-    {uint32_t deviceCount = 0;
+    uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(*_instance, &deviceCount, nullptr);
 
     std::vector<VkPhysicalDevice> devices(deviceCount);
@@ -98,13 +99,13 @@ bool PhysicalDevice::vkCreate() {
         for (uint32_t i=0; i<queueFamilyCount; ++i)
         {
             const auto& queueFamily = queueFamiles[i];
-            if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)!=0)
+            if ((queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0)
             {
                 _graphicsFamily = i;
                 matchedQueues |= VK_QUEUE_GRAPHICS_BIT;
             }
 
-            if ((queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)!=0)
+            if ((queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0)
             {
                 _computeFamily = i;
                 matchedQueues |= VK_QUEUE_COMPUTE_BIT;
@@ -113,7 +114,8 @@ bool PhysicalDevice::vkCreate() {
             if (_surface)
             {
                 VkBool32 presentSupported = false;
-                vkGetPhysicalDeviceSurfaceSupportKHR(device, i, *_surface, &presentSupported);
+                vkRes = vkGetPhysicalDeviceSurfaceSupportKHR(device, i, *_surface, &presentSupported);
+                VSG_CHECK_RESULT(vkRes);
                 if (queueFamily.queueCount>0 && presentSupported)
                 {
                     _presentFamily = i;
@@ -122,10 +124,14 @@ bool PhysicalDevice::vkCreate() {
         }
         if (((matchedQueues & _queueFlags)==_queueFlags) && (_surface==nullptr || _presentFamily>=0))
         {
-            _device=device;
+            _device = device;
             break;  //Result(new PhysicalDevice(_instance, _device, _graphicsFamily, _presentFamily, _computeFamily, _surface));
         }
     }
+    if(!_device)
+    {
+        std::cerr << "Fatal : Not Device match found in " << __FILE__ << " at line " << __LINE__ << std::endl;
+        return false;
     }
     vkGetPhysicalDeviceProperties(_device, &_properties);
     vkGetPhysicalDeviceFeatures(_device, &_features);
@@ -142,11 +148,12 @@ bool PhysicalDevice::vkCreate() {
     return true;
 
 }
+/*
 bool PhysicalDevice::vkDestroy() {
 
 }
 
-/*PhysicalDevice::Result PhysicalDevice::create(Instance* instance, VkQueueFlags queueFlags, Surface* surface)
+PhysicalDevice::Result PhysicalDevice::create(Instance* instance, VkQueueFlags queueFlags, Surface* surface)
 {
     if (!instance)
     {

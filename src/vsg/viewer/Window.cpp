@@ -91,26 +91,60 @@ void Window::initaliseDevice()
 
     // set up device
     vsg::ref_ptr<vsg::PhysicalDevice> physicalDevice = vsg::PhysicalDevice::create(_instance);
-    physicalDevice->setPreferredQueueFlags(VK_QUEUE_GRAPHICS_BIT);
+    physicalDevice->setPreferredQueueFlags( VK_QUEUE_GRAPHICS_BIT);
     physicalDevice->setSurface(_surface);
     if (!physicalDevice) throw Result("Error: vsg::Window::create(...) failed to create Window, no Vulkan PhysicalDevice supported.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
 
-    vsg::ref_ptr<vsg::Device> device = vsg::Device::create(physicalDevice.get(), _traits->allocator);
-    device->setValidationLayers(validatedNames);
-    device->setDeviceExtensions(deviceExtensions);
-       physicalDevice->vkDirty();
-       device->vkUpdate();
-    if (!*device) throw Result("Error: vsg::Window::create(...) failed to create Window, unable to create Vulkan logical Device.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
+    physicalDevice->vkDirty();
+    vsg::ref_ptr<vsg::Device> device = vsg::Device::create(physicalDevice, _traits->allocator);
+     device->setValidationLayers(validatedNames);
+     device->setDeviceExtensions(deviceExtensions);
+
+    device->vkUpdate();
+    if (!device) throw Result("Error: vsg::Window::create(...) failed to create Window, unable to create Vulkan logical Device.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
 
     // set up renderpass with the imageFormat that the swap chain will use
     vsg::SwapChainSupportDetails supportDetails = vsg::querySwapChainSupport(*physicalDevice, *_surface);
     VkSurfaceFormatKHR imageFormat = vsg::selectSwapSurfaceFormat(supportDetails);
     VkFormat depthFormat = VK_FORMAT_D24_UNORM_S8_UINT; //VK_FORMAT_D32_SFLOAT; // VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_SFLOAT_S8_UINT
-    vsg::ref_ptr<vsg::RenderPass> renderPass = vsg::RenderPass::create(device, _traits->allocator);
-    renderPass->setColorFormat(imageFormat.format);
-    renderPass->setDepthFormat(depthFormat);
-renderPass->vkUpdate();
-    if (!renderPass) throw Result("Error: vsg::Window::create(...) failed to create Window, unable to create Vulkan RenderPass.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
+    // vsg::ref_ptr<vsg::RenderPass> renderPass = vsg::RenderPass::create(device, imageFormat.format, depthFormat, _traits->allocator);
+    //if (!renderPass) throw Result("Error: vsg::Window::create(...) failed to create Window, unable to create Vulkan RenderPass.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
+    vsg::ref_ptr<vsg::RenderPass> renderPass(new  vsg::RenderPass(device, _traits->allocator));
+    //= vsg::RenderPass::create(device, imageFormat.format, depthFormat, allocator);
+    vsg::RenderPass::AttachmentDescription colorAttachment;
+    colorAttachment.format = imageFormat.format;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    vsg::RenderPass::AttachmentDescription depthAttachment;
+    depthAttachment.format = depthFormat;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    renderPass->addAttachmentDescription(colorAttachment);
+    renderPass->addAttachmentDescription(depthAttachment);
+
+    vsg::ref_ptr<vsg::SubPass > classicpass(new vsg::SubPass(renderPass));
+    classicpass->addColorAttachmentRef(colorAttachment,VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    classicpass->addDepthStencilAttachmentRef(depthAttachment,VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    classicpass->setBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
+
+    renderPass->addSubPass(classicpass);
+
+
+    vsg::ref_ptr<vsg::Dependency > classicdep(classicpass->createBackwardDependancy());//renderPass->crenew vsg::Dependency(0,classicpass));
+    classicdep->setDstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    //renderPass->addDependency(classicdep);
+    /* renderPass->setDepthFormat(depthFormat);
+    renderPass->setColorFormat(imageFormat.format);*/
+
+    /*   vsg::ref_ptr<vsg::SubPass> subpass(new vsg::SubPass(renderPass));
+    subpass->addColorAttachmentRef(colorAttachment,VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    subpass->addDepthStencilAttachmentRef(depthAttachment,VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL);
+    */
+    //     if (!renderPass) return Result("Error: vsg::GLFW_Window::create(...) failed to create Window, unable to create Vulkan RenderPass.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
+    renderPass->vkUpdate();
 
     _physicalDevice = physicalDevice;
     _device = device;

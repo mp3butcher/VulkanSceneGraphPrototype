@@ -21,7 +21,8 @@ Device::Device(
     PhysicalDevice* physicalDevice, AllocationCallbacks* allocator) :
     _physicalDevice(physicalDevice),
     _allocator(allocator)
-{   setOwner(physicalDevice);
+{
+    setOwner(physicalDevice);
     _deviceFeatures.samplerAnisotropy = VK_TRUE;
     _deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 }
@@ -40,7 +41,7 @@ bool Device::vkDestroy() {
 }
 
 bool Device::vkCreate() {
-    if (!*_physicalDevice)
+    if (!_physicalDevice)
     {
         return false ;//Device::Result("Error: vsg::Device::create(...) failed to create logical device, undefined PhysicalDevice.", VK_ERROR_INVALID_EXTERNAL_HANDLE);
     }
@@ -113,11 +114,36 @@ bool Device::vkCreate() {
 */
 }
 
-Queue * Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex){
+ref_ptr<Queue> Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex)
+{
+    if(_perfamilyQueueVector.size()<=queueFamilyIndex)
+        _perfamilyQueueVector.resize(queueFamilyIndex+1);
+
+    for(int i=0; _perfamilyQueueVector[queueFamilyIndex].size()<= queueIndex; ++i )
+        _perfamilyQueueVector[queueFamilyIndex].push_back(vsg::Queue::create(this, queueFamilyIndex, i));
+
+    _perfamilyQueueVector[queueFamilyIndex][queueIndex]->vkUpdate();
+    return _perfamilyQueueVector[queueFamilyIndex][queueIndex];
+
+
+  /*  for (auto& queue : _perfamilyQueueVector[queueFamilyIndex])
+    {
+        if (queue->getFamily() == queueFamilyIndex && queue->queueIndex() == queueIndex) return queue;
+    }*/
+
+  /*  VkQueue vk_queue;
+    vkGetDeviceQueue(_device, queueFamilyIndex, queueIndex, &vk_queue);
+
+    ref_ptr<Queue> queue(new Queue(vk_queue, queueFamilyIndex, queueIndex));
+    _queues.emplace_back(queue);
+
+    return queue;*/
+}/*
+Queue * Device::getQueue(uint32_t queueFamilyIndex, uint32_t queueIndex) {
     Queue * q=new Queue(this,queueFamilyIndex,queueIndex);
     q->vkUpdate();
     return q;
 }
-
+*/
 
 

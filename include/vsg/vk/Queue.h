@@ -24,46 +24,14 @@ namespace vsg
     // forward declare
     class Fence;
 
-  /*  class VSG_DECLSPEC Queue : public Object
-    {
-    public:
-        operator VkQueue() const { return _vkQueue; }
-
-        VkQueue queue() const { return _vkQueue; }
-        uint32_t queueFamilyIndex() const { return _queueFamilyIndex; }
-        uint32_t queueIndex() const { return _queueIndex; }
-
-        VkResult submit(const std::vector<VkSubmitInfo>& submitInfos, Fence* fence = nullptr);
-
-        VkResult submit(const VkSubmitInfo& submitInfo, Fence* fence = nullptr);
-
-        VkResult present(const VkPresentInfoKHR& info);
-
-        VkResult waitIdle();
-
-    protected:
-        Queue(VkQueue queue, uint32_t queueFamilyIndex, uint32_t queueIndex);
-        virtual ~Queue();
-
-        Queue() = delete;
-        Queue(const Queue&) = delete;
-        Queue& operator=(const Queue&) = delete;
-
-        // allow only Device to create Queue to ensure that queues are shared
-        friend class Device;
-
-        VkQueue _vkQueue;
-        uint32_t _queueFamilyIndex;
-        uint32_t _queueIndex;
-    };*/
     class VSG_DECLSPEC Queue : public Inherit<vkObjectProxy, Queue>
     {
     public:
         Queue(Device* device=nullptr, uint32_t queueFamilyIndex=0, uint32_t queueIndex=0):
             _device(device), _queueFamilyIndex(queueFamilyIndex), _queueIndex(queueIndex)
         {}
-        bool vkCreate(){
-            vkGetDeviceQueue(*_device.get(), _queueFamilyIndex, _queueIndex, &_vkQueue);
+        bool vkCreate() {
+           vkGetDeviceQueue(*_device.get(), _queueFamilyIndex, _queueIndex, &_vkQueue); return true;
         }
         inline const Device* getDevice() const { return _device; }
         inline void setDevice( Device*f) { if(_device==f)return; _device=f; vkDirty(); }
@@ -72,7 +40,7 @@ namespace vsg
         inline uint32_t getIndex() const { return _queueIndex; }
         inline void setIndex(const uint32_t &f) {if(_queueIndex==f)return; _queueIndex=f; vkDirty(); }
 
-        operator VkQueue(){ return _vkQueue; }
+        operator VkQueue() { return _vkQueue; }
 
         VkResult submit(const std::vector<VkSubmitInfo>& submitInfos, Fence* fence = nullptr);
 

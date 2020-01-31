@@ -15,7 +15,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <array>
 
 using namespace vsg;
-RenderPass::RenderPass(Device* device, AllocationCallbacks* allocator ):
+RenderPass::RenderPass(Device* device, AllocationCallbacks* allocator):
     _renderPass(VK_NULL_HANDLE),
     _device(device),
     _allocator(allocator)
@@ -39,6 +39,7 @@ bool RenderPass::vkDestroy()
     {
         vkDestroyRenderPass(*_device, _renderPass, _allocator);
     }
+    return true;
 }
 //RenderPass::Result RenderPass::create(Device* device, VkFormat imageFormat, VkFormat depthFormat, AllocationCallbacks* allocator)
 bool RenderPass::vkCreate()
@@ -56,6 +57,7 @@ bool RenderPass::vkCreate()
         for(auto dep: _depends) dependencies.push_back(*dep);
         if(_depends.empty())
         {
+            //create a default dependency
             VkSubpassDependency dependency = {};
             dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
             dependency.dstSubpass = 0;
@@ -69,7 +71,6 @@ bool RenderPass::vkCreate()
     else
     {
         //create a default render pass
-
         Attachments attachments;
 
         VkAttachmentDescription colorAttachment = {};
@@ -102,8 +103,6 @@ bool RenderPass::vkCreate()
         depthAttachmentRef.attachment = 1;
         depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-       // Subpasses subpasses;
-
         VkSubpassDescription subpass = {};
         subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         subpass.colorAttachmentCount = 1;
@@ -119,15 +118,12 @@ bool RenderPass::vkCreate()
         dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
-        // _attachments.push_back(colorAttachment);
-        //  _attachments.push_back(depthAttachment);
         dependencies.push_back(dependency);
-        subpasses.push_back(subpass );
+        subpasses.push_back(subpass);
     }
 
     VkRenderPassCreateInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-
     renderPassInfo.attachmentCount =  static_cast<uint32_t>(_attachments.size());
     renderPassInfo.pAttachments = _attachments.data();
     renderPassInfo.subpassCount = subpasses.size();
@@ -139,11 +135,7 @@ bool RenderPass::vkCreate()
     VSG_CHECK_RESULT(result);
 
     if (result == VK_SUCCESS)
-    {
-        return true;//Result(new RenderPass(renderPass, device, allocator));
-    }
+        return true;
     else
-    {
-        return false;//Result("Error: vsg::RenderPass::create(...) Failed to create VkRenderPass.", result);
-    }
+        return false;
 }

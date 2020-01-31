@@ -28,59 +28,66 @@ namespace vsg
         //dependencies (a customlist would be more flexi(add/remove) compact(footprint mem)
         std::vector<vsg::ref_ptr<vkObjectProxy> > _childproxies;
         vsg::ref_ptr<vkObjectProxy> _parentproxy;
-        inline void addDependant(vkObjectProxy*v){ _childproxies.push_back(vsg::ref_ptr<vkObjectProxy> (v)); }
-        inline void removeDependant(vkObjectProxy*v){
-            for (auto item =_childproxies.begin(); item != _childproxies.end();++item )if(*item==v) _childproxies.erase(item);
+        inline void addDependant(vkObjectProxy*v) { _childproxies.push_back(vsg::ref_ptr<vkObjectProxy>(v)); }
+        inline void removeDependant(vkObjectProxy*v) {
+            for (auto item =_childproxies.begin(); item != _childproxies.end(); ++item) if(*item==v) _childproxies.erase(item);
          }
     public:
-        static void VSG_CHECK_RESULT(VkResult res)	;
+        static void VSG_CHECK_RESULT(VkResult res);
         //be carefull with setParent should only be called when no vkObject have been allocated
         inline const vkObjectProxy* getOwner() const { return _parentproxy; }
-        inline void setOwner(vkObjectProxy*v){if(_parentproxy!=v){if(_parentproxy)_parentproxy->removeDependant(this); _parentproxy=v;if(v){v->removeDependant(this);v->addDependant(this); }}}
+        inline void setOwner(vkObjectProxy*v) {if(_parentproxy!=v) {if(_parentproxy)_parentproxy->removeDependant(this); _parentproxy=v;if(v) {v->removeDependant(this);v->addDependant(this); }}}
         //dirty local vkObjects and propagate dirtiness to dependants vkObjectProxies
-        inline void vkDirty(){ if(_state&DIRTY)return; _state|=DIRTY; for(auto it : _childproxies)it->vkDirty(); }
-        inline void vkUpdate(){
+        inline void vkDirty() { if(_state&DIRTY) return; _state |= DIRTY; for(auto it : _childproxies) it->vkDirty(); }
+        inline bool vkUpdate()
+        {
             //ascent (ascend to the first dirty)
             vkObjectProxy *firstdirt = this, *cur = this;
             while(cur)
             {
-                if(cur->_state&DIRTY)
+                if(cur->_state & DIRTY)
                     firstdirt = cur;
                 cur=cur->_parentproxy;
             }
-
-            //descent
-            if(firstdirt->_state&DIRTY){
-                if(firstdirt->_state&ALLOCATED)
-                    firstdirt->recursDestroy(); firstdirt->recursCreate();
+            //descent and propagate
+            if(firstdirt->_state & DIRTY) {
+                if(firstdirt->_state & ALLOCATED)
+                    if(!firstdirt->recursDestroy()) return false;
+                 if(!firstdirt->recursCreate()) return false;
             }
+            return true;
         }
-        ~vkObjectProxy(){if(_parentproxy)
+        ~vkObjectProxy() {if(_parentproxy)
                 _parentproxy->removeDependant(this); }
     protected:
         ///create proxy underlying vkObject(s)
-        virtual bool vkCreate(){
+        virtual bool vkCreate() {
         ///-update underlying vkObject(s)
             return true;
         }
         ///delete proxy underlying vkObject(s)
-        virtual bool vkDestroy(){
+        virtual bool vkDestroy() {
             ///-destroy vkObject(s)
             return true;
         }
-        inline bool recursDestroy(){
+        inline bool recursDestroy() {
             ///-for each dependant propagate destruction
             for(auto item : _childproxies)
                 item->recursDestroy();
             vkDestroy();
-            _state^=ALLOCATED;return true;
+            _state ^= ALLOCATED; return true;
         }
-        inline bool recursCreate(){;
-           vkCreate();
-            ///-for each dependant propagate creation
-            for(auto item : _childproxies)
-                item->recursCreate();
-            _state=ALLOCATED;return true;
+        inline bool recursCreate()
+        {
+            if (!vkCreate()) return false;
+            else
+            {
+                _state=ALLOCATED;
+                ///-for each dependant propagate creation
+                for(auto item : _childproxies)
+                    if(!item->recursCreate()) return false;
+            }
+            return true;
         }
 
     };
@@ -94,8 +101,7 @@ namespace vsg
         //static Result create(Instance* instance, VkQueueFlags queueFlags, Surface* surface=nullptr);
 
         virtual bool vkCreate();
-        virtual bool vkDestroy();
-
+        //virtual bool vkDestroy();
 
         bool complete() const { return _device != VK_NULL_HANDLE && _graphicsFamily >= 0 && _presentFamily >= 0; }
 
@@ -108,9 +114,9 @@ namespace vsg
         VkPhysicalDevice getPhysicalDevice() const { return _device; }
 
         int getGraphicsFamily() const { return _graphicsFamily; }
-        void setGraphicsFamily(int i) { _graphicsFamily=i;vkDirty(); }
+        void setGraphicsFamily(int i) { _graphicsFamily=i; vkDirty(); }
         int getPresentFamily() const { return _presentFamily; }
-        void setPresentFamily(int i) { _presentFamily=i;vkDirty(); }
+        void setPresentFamily(int i) { _presentFamily=i; vkDirty(); }
         int getComputeFamily() const { return _computeFamily; }
         void setComputeFamily(int i) { _computeFamily=i; vkDirty(); }
 
